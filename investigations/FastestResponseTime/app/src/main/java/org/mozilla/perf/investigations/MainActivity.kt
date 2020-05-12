@@ -72,8 +72,9 @@ class MainActivity : AppCompatActivity() {
         // in the PopupWindow so we set it on the contentContainer instead.
         contentContainer.viewTreeObserver.addOnDrawListener(DrawOnce(contentContainer, "PopupWindow Preinflated duration"))
 
-        // Apparently tapping outside a popup window to dismiss is custom behavior so we do the
-        // simple thing and hide them after a few seconds
+        // The dialog takes up part of the screen so we need to dismiss it if we want to continue
+        // to use the app. Apparently tapping outside a popup window to dismiss is custom behavior
+        // so we do the simple thing and hide them after a few seconds.
         uiHandler.postDelayed({
             window.dismiss()
         }, 2000)
