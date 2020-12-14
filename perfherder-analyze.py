@@ -20,12 +20,16 @@ def parse_args():
     parser.add_argument('--save-dir', help='place to save results')
     parser.add_argument('--save-id', help='an identifier to save the files as')
     parser.add_argument('--no-graph', action='store_true', help='disables the graph')
+    parser.add_argument('--force', action='store_true', help='completes analysis if save-id already exists')
     return parser.parse_args()
 
 
 def validate_args(args):
     if bool(args.save_dir) ^ bool(args.save_id):
         raise Exception('if --save-dir is specified, --save-id must be specified too or vice versa')
+
+    if args.force and not bool(args.save_id):
+        raise Exception('--force expects --save-id to be specified')
 
 
 def get_perfherder_data(stdin):
@@ -59,7 +63,7 @@ def analyze_replicates(replicates):
 
 
 def graph(analysis, save_path, no_graph):
-    # Relies on previous method to ensure save_path dirs exists.
+    # Assumes save path is writeable (i.e. dir exists).
     replicates = analysis['replicates']
     #pyplot.plot(range(len(replicates)), replicates)
     y = [5 for _ in replicates]
@@ -70,16 +74,15 @@ def graph(analysis, save_path, no_graph):
         pyplot.show()
 
 
-def save_analysis(analysis, save_dir, save_path):
-    os.makedirs(save_dir, exist_ok=True)
-
+def save_analysis(analysis, save_path):
+    # Assumes save path is writeable (i.e. dir exists).
     path = save_path + '-analysis.txt'
     with open(path, 'w') as f:
         pprint(analysis, stream=f, compact=True)
 
 
 def save_input(raw_data, save_path):
-    # Relies on previous method to ensure save_path dirs exists.
+    # Assumes save path is writeable (i.e. dir exists).
     path = save_path + '-input.txt'
     with open(path, 'w') as f:
         print(raw_data, file=f)
@@ -95,8 +98,15 @@ def main():
 
     save_path = None
     if args.save_dir and args.save_id:
-        save_path = os.path.join(args.save_dir, args.save_id)
-        save_analysis(analysis, args.save_dir, save_path)
+        os.makedirs(args.save_dir, exist_ok=True)
+        files = os.listdir(args.save_dir)
+        match_files = [f for f in files if f.startswith(args.save_id)]
+        if args.force or len(match_files) == 0:
+            save_path = os.path.join(args.save_dir, args.save_id)
+        else:
+            raise Exception('File at {} already exists. Unable to save. Exiting...'.format(args.save_id))
+
+        save_analysis(analysis, save_path)
         save_input(raw_data, save_path)
     pprint(analysis, compact=True)
     graph(analysis, save_path, args.no_graph)
