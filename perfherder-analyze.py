@@ -19,6 +19,7 @@ def parse_args():
     parser = ArgumentParser()
     parser.add_argument('--save-dir', help='place to save results')
     parser.add_argument('--save-id', help='an identifier to save the files as')
+    parser.add_argument('--no-graph', action='store_true', help='disables the graph')
     return parser.parse_args()
 
 
@@ -57,7 +58,7 @@ def analyze_replicates(replicates):
     }
 
 
-def graph(analysis, save_path):
+def graph(analysis, save_path, no_graph):
     # Relies on previous method to ensure save_path dirs exists.
     replicates = analysis['replicates']
     #pyplot.plot(range(len(replicates)), replicates)
@@ -65,7 +66,8 @@ def graph(analysis, save_path):
     pyplot.scatter(replicates, y)
     if save_path:
         pyplot.savefig(save_path + '-graph.pdf')
-    pyplot.show()
+    if not no_graph:
+        pyplot.show()
 
 
 def save_analysis(analysis, save_dir, save_path):
@@ -74,7 +76,13 @@ def save_analysis(analysis, save_dir, save_path):
     path = save_path + '-analysis.txt'
     with open(path, 'w') as f:
         pprint(analysis, stream=f, compact=True)
-    # TODO: save graph
+
+
+def save_input(raw_data, save_path):
+    # Relies on previous method to ensure save_path dirs exists.
+    path = save_path + '-input.txt'
+    with open(path, 'w') as f:
+        print(raw_data, file=f)
 
 
 def main():
@@ -89,8 +97,9 @@ def main():
     if args.save_dir and args.save_id:
         save_path = os.path.join(args.save_dir, args.save_id)
         save_analysis(analysis, args.save_dir, save_path)
+        save_input(raw_data, save_path)
     pprint(analysis, compact=True)
-    graph(analysis, save_path)
+    graph(analysis, save_path, args.no_graph)
 
 
 if __name__ == '__main__':
