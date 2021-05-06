@@ -4,6 +4,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import argparse
+import ast
 import json
 import statistics as stat
 from pprint import pprint
@@ -34,6 +35,7 @@ The logcat message must be \"average <value>\": other log values such as tags ar
 
 {}""".format(LOGCAT_EXPECTED_FORMAT))
     parser.add_argument("--from-perfherder", action="store_true", help="reads the perfherder-data.json output by mozperftest VIEW")
+    parser.add_argument("--from-output", action="store_true", help="reads the output of this script: useful for drawing a graph or updating output from older versions of this script to newer versions")
 
     parser.add_argument("--graph", action="store_true", help="displays a graph of the replicates, in addition to printing the output. Requires matplotlib (from the venv requirements)")
 
@@ -60,6 +62,12 @@ def read_from_perfherder_json(path):
 
     # Hard-coded to paths for perftest VIEW.
     return [float(e) for e in contents['suites'][0]['subtests'][0]['replicates']]
+
+
+def read_from_output(path):
+    with open(path) as f:
+        contents = ast.literal_eval(f.read())
+    return contents['replicates']
 
 
 def read_from_logcat_file(path):
@@ -118,6 +126,8 @@ def main():
         measurement_arr = read_from_logcat_file(args.path)
     elif args.from_perfherder:
         measurement_arr = read_from_perfherder_json(args.path)
+    elif args.from_output:
+        measurement_arr = read_from_output(args.path)
     else:  # default operation: newline file format
         measurement_arr = read_from_file_separated_by_newlines(args.path)
     stats = to_stats(measurement_arr)
