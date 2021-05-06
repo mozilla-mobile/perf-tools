@@ -81,7 +81,8 @@ def to_stats(measurements_arr):
         'mean': stat.mean(measurements_arr),
         'median': stat.median(measurements_arr),
         'min': min(measurements_arr),
-        'replicates': measurements_arr
+        'replicate_count': len(measurements_arr),
+        'replicates': measurements_arr,
     }
 
 
