@@ -35,6 +35,8 @@ The logcat message must be \"average <value>\": other log values such as tags ar
 {}""".format(LOGCAT_EXPECTED_FORMAT))
     parser.add_argument("--from-perfherder", action="store_true", help="reads the perfherder-data.json output by mozperftest VIEW")
 
+    parser.add_argument("--graph", action="store_true", help="displays a graph of the replicates, in addition to printing the output. Requires matplotlib (from the venv requirements)")
+
     parser.add_argument(
         "--print-github-table-header", action="store_true",
         help="prints the input-agnostic header for --print-github-table-row args and exits. " +
@@ -95,6 +97,16 @@ def to_github_table_row(stats):
     return '|todo-iteration-name|{}|{}|{}|'.format(stats['mean'], stats['median'], stats['max'])
 
 
+def graph(stats):
+    from matplotlib import pyplot as plt
+    replicates = stats['replicates']
+    replicate_number = range(len(replicates))
+    plt.xlabel('Iteration number')
+    plt.ylabel('Duration')
+    plt.scatter(replicate_number, replicates)
+    plt.show()
+
+
 def main():
     args = parse_args()
 
@@ -114,6 +126,9 @@ def main():
         print(to_github_table_row(stats))
     else:
         pprint(stats, compact=True)
+
+    if args.graph:
+        graph(stats)
 
 
 if __name__ == '__main__':
