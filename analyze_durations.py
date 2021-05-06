@@ -6,7 +6,9 @@
 import argparse
 import ast
 import json
+import os
 import statistics as stat
+import sys
 from pprint import pprint
 
 DESC = """Provides statistics relevant to performance analysis on the given duration
@@ -29,6 +31,9 @@ LOGCAT_EXPECTED_FORMAT = '2020-05-04 15:15:50.340 10845-10845/? E/lol: average 3
 def parse_args():
     parser = argparse.ArgumentParser(description=DESC, formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument("path", help="path to a file with duration measurements separated by newlines")
+    parser.add_argument("-o", "--output-safe", help="""writes the output to the given path, in addition to printing.
+This operation is safe (non-destructive): if the path already exists, the script will abort.
+This is useful to avoid accidentally deleting results.""")
 
     parser.add_argument("--from-logcat", action="store_true", help="""reads a file with lines from logcat instead of durations separated by newlines.
 The logcat message must be \"average <value>\": other log values such as tags are ignored. For example:
@@ -105,6 +110,25 @@ def to_github_table_row(stats):
     return '|todo-iteration-name|{}|{}|{}|'.format(stats['mean'], stats['median'], stats['max'])
 
 
+def save_output(stats, path):
+    if os.path.exists(path):
+        raise Exception('path specified by --output-safe/-o already ' +
+        'exists: aborting to prevent accidental overwrites. Use stream ' +
+        'redirection operators for intentional overwriting.')
+
+    with open(path, 'x') as f:
+        print_stats(stats, f)
+
+    print('Saved output to path: {}'.format(path))
+    print('Also printing to stdout…\n')
+
+
+def print_stats(stats, stream=None):
+    if not stream:
+        stream = sys.stdout
+    pprint(stats, compact=True, stream=stream)
+
+
 def graph(stats):
     from matplotlib import pyplot as plt
     replicates = stats['replicates']
@@ -132,10 +156,14 @@ def main():
         measurement_arr = read_from_file_separated_by_newlines(args.path)
     stats = to_stats(measurement_arr)
 
+    # Called before printing so if we abort, it's clearer to the user there was an error.
+    if args.output_safe:
+        save_output(stats, args.output_safe)
+
     if args.print_github_table_row:
         print(to_github_table_row(stats))
     else:
-        pprint(stats, compact=True)
+        print_stats(stats)
 
     if args.graph:
         graph(stats)
