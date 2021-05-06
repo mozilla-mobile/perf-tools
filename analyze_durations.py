@@ -4,6 +4,7 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 import argparse
+import json
 import statistics as stat
 from pprint import pprint
 
@@ -32,6 +33,7 @@ def parse_args():
 The logcat message must be \"average <value>\": other log values such as tags are ignored. For example:
 
 {}""".format(LOGCAT_EXPECTED_FORMAT))
+    parser.add_argument("--from-perfherder", action="store_true", help="reads the perfherder-data.json output by mozperftest VIEW")
 
     parser.add_argument(
         "--print-github-table-header", action="store_true",
@@ -48,6 +50,14 @@ def read_from_file_separated_by_newlines(path):
     with open(path) as f:
         contents = f.read()
     return [float(r) for r in contents.split('\n') if r]  # trailing if is used to remove empty lines.
+
+
+def read_from_perfherder_json(path):
+    with open(path) as f:
+        contents = json.load(f)
+
+    # Hard-coded to paths for perftest VIEW.
+    return [float(e) for e in contents['suites'][0]['subtests'][0]['replicates']]
 
 
 def read_from_logcat_file(path):
@@ -93,6 +103,8 @@ def main():
 
     if args.from_logcat:
         measurement_arr = read_from_logcat_file(args.path)
+    elif args.from_perfherder:
+        measurement_arr = read_from_perfherder_json(args.path)
     else:  # default operation: newline file format
         measurement_arr = read_from_file_separated_by_newlines(args.path)
     stats = to_stats(measurement_arr)
