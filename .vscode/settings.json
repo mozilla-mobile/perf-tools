@@ -1,0 +1,5 @@
+{
+    "python.pythonPath": "venv/bin/python3",
+    "python.linting.pycodestyleEnabled": true,
+    "python.linting.enabled": true
+}
