@@ -2,3 +2,17 @@
 Tools for the performance team that don't fit into other repositories
 
 File issues in the [`perf-frontend-issues` repository](https://github.com/mozilla-mobile/perf-frontend-issues/issues).
+
+## Configuration
+To use this repo, you'll need to create a virtual environment and install the
+dependencies:
+```sh
+python3 -m venv venv
+source venv/bin/activate
+
+# Ensure the previous commands executed correctly before running this one
+# to avoid installing the dependencies globally.
+pip install -r requirements.txt
+```
+
+If you ever open a new shell, don't forget to reactivate the virtualenv before executing these scripts!
