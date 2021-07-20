@@ -5,6 +5,7 @@
 
 import statistics
 
+
 def percent_change(old, new):
     # Ensure we're not using truncating integers.
     old = float(old)

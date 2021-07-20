@@ -42,12 +42,14 @@ def parse_args():
 This operation is safe (non-destructive): if the path already exists, the script will abort.
 This is useful to avoid accidentally deleting results.""")
 
-    parser.add_argument("--graph", action="store_true", help="displays a graph of the replicates, in addition to printing the output. Requires matplotlib (from the venv requirements)")
+    parser.add_argument("--graph", action="store_true",
+                        help=("displays a graph of the replicates, in addition to printing the output. Requires "
+                              "matplotlib (from the venv requirements)"))
 
     parser.add_argument(
         "--print-github-table-header", action="store_true",
-        help="prints the input-agnostic header for --print-github-table-row args and exits. " +
-        "the path is still required to ease the implementation requirements"
+        help=("prints the input-agnostic header for --print-github-table-row args and exits. "
+              "the path is still required to ease the implementation requirements")
     )
     parser.add_argument(
         "--print-github-table-row", action="store_true", help="prints the result formatted as a GitHub table row"
@@ -63,7 +65,7 @@ def detect_filetype(path):
         return InputFileType.PERFHERDER_JSON
     elif contents.startswith("{'"):
         return InputFileType.SCRIPT_OUTPUT
-    elif re.match('^\d+-\d+', contents):
+    elif re.match(r'^\d+-\d+', contents):
         return InputFileType.LOGCAT
     else:
         return InputFileType.NEWLINES
@@ -126,9 +128,9 @@ def to_github_table_row(stats):
 
 def save_output(stats, path):
     if os.path.exists(path):
-        raise Exception('path specified by --output-safe/-o already ' +
-        'exists: aborting to prevent accidental overwrites. Use stream ' +
-        'redirection operators for intentional overwriting.')
+        raise Exception(('path specified by --output-safe/-o already '
+                         'exists: aborting to prevent accidental overwrites. Use stream '
+                         'redirection operators for intentional overwriting.'))
 
     with open(path, 'x') as f:
         print_stats(stats, f)
@@ -158,11 +160,16 @@ class InputFileType(Enum):
     PERFHERDER_JSON = auto()
     SCRIPT_OUTPUT = auto()
     LOGCAT = auto()
+
     def read_from(self, path):
-        if self is InputFileType.NEWLINES: return read_from_file_separated_by_newlines(path)
-        elif self is InputFileType.PERFHERDER_JSON: return read_from_perfherder_json(path)
-        elif self is InputFileType.SCRIPT_OUTPUT: return read_from_output(path)
-        elif self is InputFileType.LOGCAT: return read_from_logcat_file(path)
+        if self is InputFileType.NEWLINES:
+            return read_from_file_separated_by_newlines(path)
+        elif self is InputFileType.PERFHERDER_JSON:
+            return read_from_perfherder_json(path)
+        elif self is InputFileType.SCRIPT_OUTPUT:
+            return read_from_output(path)
+        elif self is InputFileType.LOGCAT:
+            return read_from_logcat_file(path)
         raise RuntimeError('Unknown input type: {}'.format(self))
 
 

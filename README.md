@@ -23,4 +23,4 @@ To run the linter, make sure your virtualenv is activated and run:
 pycodestyle
 ```
 
-Optionally, a path can be passed in.
+Optionally, a path can be passed in. If you want more information about an error, pass the `--show-pep8` option.
