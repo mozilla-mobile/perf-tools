@@ -17,6 +17,12 @@ pip install -r requirements.txt
 
 If you ever open a new shell, don't forget to reactivate the virtualenv before executing these scripts!
 
+### Pre-push hook
+We also recommend setting up a pre-push hook to run some checks before they hit CI:
+```
+ln -s ../../tools/pre-push-recommended.sh .git/hooks/pre-push
+```
+
 ## Development
 To run the linter, make sure your virtualenv is activated and run:
 ```sh
