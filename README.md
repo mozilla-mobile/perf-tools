@@ -16,3 +16,11 @@ pip install -r requirements.txt
 ```
 
 If you ever open a new shell, don't forget to reactivate the virtualenv before executing these scripts!
+
+## Development
+To run the linter, make sure your virtualenv is activated and run:
+```sh
+pycodestyle
+```
+
+Optionally, a path can be passed in.
