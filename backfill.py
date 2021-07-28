@@ -23,6 +23,7 @@ ANALYZED_DURATIONS_FILE_TEMPLATE = "{apk_name}_perf_results.txt"
 
 KEY_NAME = "name"
 KEY_DATETIME = "date"
+KEY_COMMIT = "commit"
 
 DATETIME_FORMAT = "%Y.%m.%d"
 
@@ -62,7 +63,7 @@ def fetch_nightly(download_date):
         return None
 
     # TODO: Could add build type, architecture, etc...
-    return {KEY_NAME: filename, KEY_DATETIME: download_date}
+    return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: ""}
 
 
 def get_date_array_for_range(startdate, enddate):
@@ -140,6 +141,49 @@ def cleanup(array_of_apk_path):
         subprocess.run(["rm", i[KEY_NAME]])
 
 
+def get_commits_for_date_range(startdate, enddate, repository_path):
+    subprocess.run(["git", "fetch", "upstream"], cwd=repository_path)
+    subprocess.run(["git", "checkout", "upstream/master"], cwd=repository_path)
+    proc = subprocess.run(
+                             [
+                                "git", "log", "--since={start}".format(start=startdate),
+                                "--until={end}".format(end=enddate), "--pretty=format:'%H'"
+                             ],
+                             cwd=repository_path, capture_output=True, text=True
+                            ).stdout
+    commit_string = proc.replace("'", "")
+    return commit_string.split("\n")
+
+
+#TODO pass in build type (release, beta, nightly, etc...)
+def build_apk_for_commit(hash, repository_path):
+    print(hash)
+    subprocess.run(["git", "checkout", hash], cwd=repository_path)
+    subprocess.run(["./gradlew", "assembleNightly"], cwd=repository_path)
+
+
+def build_apk_path_string(repository_path, build_type, phone_architecture):
+    build_apk_destination = repository_path + "/app/build/outputs/apk/" + build_type + "/"
+    apk_name = "app-" + phone_architecture + "-" + build_type + ".apk"
+    return build_apk_destination + apk_name
+
+
+def move_apk_to_cwd(apk_path, commit_hash):
+    new_apk_name = "apk_commit_" + commit_hash + ".apk"
+    subprocess.run(["mv", apk_path, new_apk_name])
+
+
+def build_apks_for_commits(startdate, enddate, repository_path, build_type, phone_architecture):
+    apk_metadata_array = []
+    array_of_commit_hash = get_commits_for_date_range(startdate, enddate, repository_path)
+    for commit in array_of_commit_hash:
+        build_apk_for_commit(commit, repository_path)
+        built_apk_name = build_apk_path_string(repository_path, build_type, phone_architecture)
+        move_apk_to_cwd = move_apk_to_cwd(built_apk_name, commit)
+        apk_metadata_array.append({KEY_NAME: built_apk_name, KEY_DATETIME: "", KEY_COMMIT: commit})
+    return apk_metadata_array
+
+
 def main():
     args = parse_args()
     if args.type == "commits" and args.fenix_path is None:
@@ -149,6 +193,9 @@ def main():
 
     if args.type == "nightly":
         array_of_apk_metadata = download_nightly_for_range(array_of_dates)
+    else:
+        #TODO pass in commit range instead of date
+        array_of_apk_metadata = build_apks_for_commits(args.start, args.enddate, arg.repository_path, args.type, args.architecture)
 
     run_performance_analysis_on_nightly(args.package_id, args.path_to_startup_script, array_of_apk_metadata)
 
