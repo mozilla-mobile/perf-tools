@@ -55,6 +55,8 @@ def parse_args():
                         help="end date to backfill until.If empty, default will be the current date")
     parser.add_argument("--startcommit", help="Oldest commit to build.")
     parser.add_argument("--endcommit", help="Last commit to run performance analysis")
+    parser.add_argument("--repo_branch",  help="Branch to run this script on.")
+    parser.add_argument("--git_remote_name",  help="If this needs to run on a remote repository, pass the name here")
     parser.add_argument("-r", "--repository_path",
                         help="Path to the repository where the commits will be gotten from")
     parser.add_argument("-c", "--cleanup", action="store_true",
@@ -149,42 +151,68 @@ def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_scr
         analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_path, build_type)
 
 
-def cleanup(array_of_apk_path):
-    for i in array_of_apk_path:
-        subprocess.run(["rm", i[KEY_NAME]])
+def checkout_repository_to_correct_branch(repository_path, branch, remote_name):
+    remote_repo_name = "upstream" if len(remote_name) == 0 else remote_name
+    branch = "main" if len(branch) == 0 else branch
+
+    fetch_proc = subprocess.run(["git", "fetch", remote_repo_name], cwd=repository_path, capture_output=True)
+    checkout_proc = subprocess.run(["git", "checkout", remote_repo_name + "/" + branch],
+                                   cwd=repository_path, capture_output=True)
+
+    if fetch_proc.returncode != 0:
+        print(("\n\nSomething went wrong while fetching this repostirory: {repo} . The associated error message was:"
+               "\n\n {error}".format(repo=repository_path, error=fetch_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
+
+    elif checkout_proc.returncode != 0:
+        print(("\n\nSomething went wrong while checking out this branch: {br} . The associated error message was:"
+               "\n\n {error}".format(br=branch, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
 
 
 def get_commits_for_date_range(startdate, enddate, repository_path):
-    subprocess.run(["git", "fetch", "upstream"], cwd=repository_path)
-    subprocess.run(["git", "checkout", "upstream/master"], cwd=repository_path)
-    proc = subprocess.run(
-                             [
-                                "git", "log", "--since={start}".format(start=startdate),
-                                "--until={end}".format(end=enddate), "--pretty=format:'%H'"
-                             ],
-                             cwd=repository_path, capture_output=True, text=True
-                            ).stdout
+    commit_proc = subprocess.run(
+        ["git", "log", "--since={start}".format(start=startdate),
+         "--until={end}".format(end=enddate), "--pretty=format:'%H'"],
+        cwd=repository_path, capture_output=True, text=True).stdout
+
+    if commit_proc.returncode != 0:
+        print(("\n\nSomething went wrong while checking out this commit range: {start}..{end}" +
+               "The associated error message was:\n\n {error}".format(
+                start=startdate, end=enddate, error=commit_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
+
     commit_string = proc.replace("'", "")
     return commit_string.split("\n")
 
 
 def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
-    subprocess.run(["git", "fetch", "upstream"], cwd=repository_path)
-    subprocess.run(["git", "checkout", "upstream/master"], cwd=repository_path)
-    proc = subprocess.run(
-                          [
-                            "git", "rev-list", "--ancestry-path",
-                            start_commit + ".." + end_commit
-                          ],
-                          cwd=repository_path, capture_output=True, text=True
-                          ).stdout
-    commit_list = proc.replace("'", "")
+    commit_proc = subprocess.run(
+        ["git", "rev-list", "--ancestry-path", start_commit + ".." + end_commit],
+        cwd=repository_path, capture_output=True, text=True).stdout
+    commit_list = commit_proc.replace("'", "")
+
+    if commit_proc.returncode != 0:
+        print(("\n\nSomething went wrong while checking out this commit range: {start}..{end}" +
+               "The associated error message was:\n\n {error}".format(
+                start=start_commit, end=end_commit, error=commit_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
+
     return commit_list.split("\n")
 
 
 def build_apk_for_commit(hash, repository_path, build_type):
-    subprocess.run(["git", "checkout", hash], cwd=repository_path)
-    subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path)
+    checkout_proc = subprocess.run(["git", "checkout", hash], cwd=repository_path, capture_output=True)
+    assemble_proc = subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path, capture_output=True)
+
+    if checkout_proc.returncode != 0:
+        print(("\n\nSomething went wrong while checking out this commit: {commit} . The associated error message was:"
+               "\n\n {error}".format(commit=hash, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
+    elif assemble_proc.returncode != 0:
+        print(("\n\nSomething went wrong while assembling this build: {build} . The associated error message was:"
+               "\n\n {error}".format(build=build_type, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
 
 
 def build_apk_path_string(repository_path, build_type, phone_architecture):
@@ -195,20 +223,21 @@ def build_apk_path_string(repository_path, build_type, phone_architecture):
 
 def move_apk_to_cwd(apk_path, commit_hash):
     new_apk_name = "apk_commit_" + commit_hash + ".apk"
-    subprocess.run(["mv", apk_path, new_apk_name])
+    proc = subprocess.run(["mv", apk_path, new_apk_name])
+    if proc.returncode != 0:
+        print(("\n\nSomething went wrong while moving the built apk: {apk} . The associated error message was:"
+               "\n\n {error}".format(apk=apk_path, error=proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
     return new_apk_name
 
 
 def build_apks_for_commits(
-                           startdate=None,
-                           enddate=None,
-                           start_commit=None,
-                           end_commit=None,
-                           repository_path=None,
-                           build_type=None,
-                           architecture=None
-                           ):
+        startdate=None, enddate=None, start_commit=None, end_commit=None, repository_path=None,
+        build_type=None, architecture=None, branch="", remote_name=""):
     apk_metadata_array = []
+
+    checkout_repository_to_correct_branch(repository_path, branch, remote_name)
+
     if startdate is None:
         array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
     else:
@@ -217,15 +246,17 @@ def build_apks_for_commits(
         build_apk_for_commit(commit, repository_path, build_type)
         built_apk_name = build_apk_path_string(repository_path, build_type, architecture)
         new_apk_name = move_apk_to_cwd(built_apk_name, commit)
-        apk_metadata_array.append(
-                                  {
-                                   KEY_NAME: new_apk_name,
-                                   KEY_DATETIME: "",
-                                   KEY_COMMIT: commit,
-                                   KEY_ARCHITECTURE: architecture
-                                   }
-                                  )
+        apk_metadata_array.append({
+            KEY_NAME: new_apk_name,
+            KEY_DATETIME: "",
+            KEY_COMMIT: commit,
+            KEY_ARCHITECTURE: architecture})
     return apk_metadata_array
+
+
+def cleanup(array_of_apk_path):
+    for i in array_of_apk_path:
+        subprocess.run(["rm", i[KEY_NAME]])
 
 
 def validate_args(args):
@@ -234,7 +265,7 @@ def validate_args(args):
     if args.type == "commitsRange" and not args.startcommit and not args.endcommit:
         raise Exception("Running backfill with commits between two commits requires a start and end commit")
     if (args.type == "commitsRange" or args.type == "commitsDate") and not args.repository_path:
-        raise Exception("Running backfill with any commits option " + 
+        raise Exception("Running backfill with any commits option " +
                         "requires a path to a repository where git can be used")
     if (args.type == "commitsRange" or args.type == "commitsDate") and not args.build_type:
         raise Exception("Running backfill with any commits option requires a built type")
@@ -252,27 +283,28 @@ def main():
         array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
     elif args.type == "commitsDate":
         array_of_apk_metadata = build_apks_for_commits(
-                                                       startdate=args.startdate,
-                                                       enddate=args.enddate,
-                                                       repository_path=args.repository_path,
-                                                       build_type=args.build_type,
-                                                       architecture=args.architecture
-                                                       )
+            startdate=args.startdate,
+            enddate=args.enddate,
+            repository_path=args.repository_path,
+            build_type=args.build_type,
+            architecture=args.architecture,
+            branch=args.branch if args.branch else "",
+            remote_name=args.git_remote_name if args.git_remote_name else "")
     else:
         array_of_apk_metadata = build_apks_for_commits(
-                                                       start_commit=args.startcommit,
-                                                       end_commit=args.endcommit,
-                                                       repository_path=args.repository_path,
-                                                       build_type=args.build_type,
-                                                       architecture=args.architecture
-                                                       )
+            start_commit=args.startcommit,
+            end_commit=args.endcommit,
+            repository_path=args.repository_path,
+            build_type=args.build_type,
+            architecture=args.architecture,
+            branch=args.branch if args.branch else "",
+            remote_name=args.git_remote_name if args.git_remote_name else "")
 
     run_performance_analysis_on_nightly(
-                                        FENIX_CHANNEL_TO_PKG[args.build_type],
-                                        args.path_to_startup_script,
-                                        array_of_apk_metadata,
-                                        args.build_type
-                                        )
+        FENIX_CHANNEL_TO_PKG[args.build_type],
+        args.path_to_startup_script,
+        array_of_apk_metadata,
+        args.build_type)
 
     if args.cleanup is True:
         cleanup(array_of_apk_metadata)
