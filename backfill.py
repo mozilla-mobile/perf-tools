@@ -24,8 +24,16 @@ ANALYZED_DURATIONS_FILE_TEMPLATE = "{apk_name}_perf_results.txt"
 KEY_NAME = "name"
 KEY_DATETIME = "date"
 KEY_COMMIT = "commit"
+KEY_ARCHITECTURE = "architecture"
 
 DATETIME_FORMAT = "%Y.%m.%d"
+
+FENIX_CHANNEL_TO_PKG = {
+    'nightly': 'org.mozilla.fenix',
+    'beta': 'org.mozilla.firefox.beta',
+    'release': 'org.mozilla.firefox',
+    'debug': 'org.mozilla.fenix.debug'
+}
 
 
 def parse_args():
@@ -33,15 +41,20 @@ def parse_args():
 
     parser.add_argument("path_to_startup_script",
                         help="Path to the measure_start_up.py script needed to gather startupperformance metrics")
-    parser.add_argument("package_id", help="Package id associated with the apk to install / uninstall")
-    parser.add_argument("start", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
+    parser.add_argument("build_type", choices=["nightly", "beta", "release", "debug"],
+                        help="The firefox build to run performance analysis on")
+    parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a-"])
+    parser.add_argument("-t", "--type", required=True, choices=["nightly", "commitsDate", "commitsRange"],
+                        help="The type of system the backfill should run performance analysis on. commitsDate option" +
+                        "will get commits between two dates whereas the commitsRange will get commits between two" +
+                        "commits")
+    parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
                         help="Date to start the backfill")
-    parser.add_argument("-e", "--enddate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
+    parser.add_argument("--enddate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
                         default=datetime.now(),
                         help="end date to backfill until.If empty, default will be the current date")
-    parser.add_argument("-t", "--type", required=True, choices=["nightly", "commits"],
-                        help="The type of system the backfill should run performance analysis on")
-
+    parser.add_argument("--startcommit", help="Oldest commit to build.")
+    parser.add_argument("--endcommit", help="Last commit to run performance analysis")
     parser.add_argument("-r", "--repository_path",
                         help="Path to the repository where the commits will be gotten from")
     parser.add_argument("-c", "--cleanup", action="store_true",
@@ -50,7 +63,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def fetch_nightly(download_date):
+def fetch_nightly(download_date, architecture):
     download_date_string = datetime.strftime(download_date, DATETIME_FORMAT)
     nightly_url = NIGHTLY_BASE_URL.format(date=download_date_string)
     filename = "nightly_" + download_date_string.replace(".", "_") + ".apk"
@@ -63,7 +76,7 @@ def fetch_nightly(download_date):
         return None
 
     # TODO: Could add build type, architecture, etc...
-    return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: ""}
+    return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: "", KEY_ARCHITECTURE: architecture}
 
 
 def get_date_array_for_range(startdate, enddate):
@@ -71,9 +84,9 @@ def get_date_array_for_range(startdate, enddate):
     return [startdate + timedelta(days=i) for i in range(delta_dates)]
 
 
-def download_nightly_for_range(array_of_dates):
+def download_nightly_for_range(array_of_dates, artchitecture):
     # TODO if file exist and no -f option
-    apk_metadata_array = [fetch_nightly(date) for date in array_of_dates]
+    apk_metadata_array = [fetch_nightly(date, architecture) for date in array_of_dates]
     return [e for e in apk_metadata_array if e is not None]
 
 
@@ -95,12 +108,12 @@ def uninstall_apk(package_id):
               file=sys.stderr)
 
 
-def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path):
-    subprocess.run([path_to_measure_start_up_script, "nightly", "cold_view_nav_start", durations_output_path],
+def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type):
+    subprocess.run([path_to_measure_start_up_script, build_type, "cold_view_nav_start", durations_output_path],
                    stdout=subprocess.PIPE, check=False)
 
 
-def analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_metadata):
+def analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_metadata, build_type):
     uninstall_apk(package_id)
 
     was_install_successful = install_apk(apk_metadata[KEY_NAME])
@@ -113,7 +126,7 @@ def analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, a
         durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(apk=apk_name))
         analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(apk_name=apk_name))
 
-        run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path)
+        run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type)
         get_result_from_durations(durations_output_path, analyzed_durations_path)
 
 
@@ -131,9 +144,9 @@ def get_result_from_durations(start_up_durations_path, analyzed_path):
     analyze_durations.save_output(stats, analyzed_path)
 
 
-def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path):
+def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path, build_type):
     for apk_path in array_of_apk_path:
-        analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_path)
+        analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_path, build_type)
 
 
 def cleanup(array_of_apk_path):
@@ -155,11 +168,23 @@ def get_commits_for_date_range(startdate, enddate, repository_path):
     return commit_string.split("\n")
 
 
-#TODO pass in build type (release, beta, nightly, etc...)
-def build_apk_for_commit(hash, repository_path):
-    print(hash)
+def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
+    subprocess.run(["git", "fetch", "upstream"], cwd=repository_path)
+    subprocess.run(["git", "checkout", "upstream/master"], cwd=repository_path)
+    proc = subprocess.run(
+                          [
+                            "git", "rev-list", "--ancestry-path",
+                            start_commit + ".." + end_commit
+                          ],
+                          cwd=repository_path, capture_output=True, text=True
+                          ).stdout
+    commit_list = proc.replace("'", "")
+    return commit_list.split("\n")
+
+
+def build_apk_for_commit(hash, repository_path, build_type):
     subprocess.run(["git", "checkout", hash], cwd=repository_path)
-    subprocess.run(["./gradlew", "assembleNightly"], cwd=repository_path)
+    subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path)
 
 
 def build_apk_path_string(repository_path, build_type, phone_architecture):
@@ -171,17 +196,48 @@ def build_apk_path_string(repository_path, build_type, phone_architecture):
 def move_apk_to_cwd(apk_path, commit_hash):
     new_apk_name = "apk_commit_" + commit_hash + ".apk"
     subprocess.run(["mv", apk_path, new_apk_name])
+    return new_apk_name
 
 
-def build_apks_for_commits(startdate, enddate, repository_path, build_type, phone_architecture):
+def build_apks_for_commits(
+                           startdate=None,
+                           enddate=None,
+                           start_commit=None,
+                           end_commit=None,
+                           repository_path=None,
+                           build_type=None,
+                           architecture=None
+                           ):
     apk_metadata_array = []
-    array_of_commit_hash = get_commits_for_date_range(startdate, enddate, repository_path)
+    if startdate is None:
+        array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
+    else:
+        array_of_commit_hash = get_commits_for_date_range(startdate, enddate, repository_path)
     for commit in array_of_commit_hash:
-        build_apk_for_commit(commit, repository_path)
-        built_apk_name = build_apk_path_string(repository_path, build_type, phone_architecture)
-        move_apk_to_cwd = move_apk_to_cwd(built_apk_name, commit)
-        apk_metadata_array.append({KEY_NAME: built_apk_name, KEY_DATETIME: "", KEY_COMMIT: commit})
+        build_apk_for_commit(commit, repository_path, build_type)
+        built_apk_name = build_apk_path_string(repository_path, build_type, architecture)
+        new_apk_name = move_apk_to_cwd(built_apk_name, commit)
+        apk_metadata_array.append(
+                                  {
+                                   KEY_NAME: new_apk_name,
+                                   KEY_DATETIME: "",
+                                   KEY_COMMIT: commit,
+                                   KEY_ARCHITECTURE: architecture
+                                   }
+                                  )
     return apk_metadata_array
+
+
+def validate_args(args):
+    if args.type == "commitsDate" and not args.startdate:
+        raise Exception("Running backfill with commits between two date requires a start date")
+    if args.type == "commitsRange" and not args.startcommit and not args.endcommit:
+        raise Exception("Running backfill with commits between two commits requires a start and end commit")
+    if (args.type == "commitsRange" or args.type == "commitsDate") and not args.repository_path:
+        raise Exception("Running backfill with any commits option " + 
+                        "requires a path to a repository where git can be used")
+    if (args.type == "commitsRange" or args.type == "commitsDate") and not args.build_type:
+        raise Exception("Running backfill with any commits option requires a built type")
 
 
 def main():
@@ -189,15 +245,34 @@ def main():
     if args.type == "commits" and args.fenix_path is None:
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
 
-    array_of_dates = get_date_array_for_range(args.start, args.enddate)
+    validate_args(args)
 
     if args.type == "nightly":
-        array_of_apk_metadata = download_nightly_for_range(array_of_dates)
+        array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
+        array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
+    elif args.type == "commitsDate":
+        array_of_apk_metadata = build_apks_for_commits(
+                                                       startdate=args.startdate,
+                                                       enddate=args.enddate,
+                                                       repository_path=args.repository_path,
+                                                       build_type=args.build_type,
+                                                       architecture=args.architecture
+                                                       )
     else:
-        #TODO pass in commit range instead of date
-        array_of_apk_metadata = build_apks_for_commits(args.start, args.enddate, arg.repository_path, args.type, args.architecture)
+        array_of_apk_metadata = build_apks_for_commits(
+                                                       start_commit=args.startcommit,
+                                                       end_commit=args.endcommit,
+                                                       repository_path=args.repository_path,
+                                                       build_type=args.build_type,
+                                                       architecture=args.architecture
+                                                       )
 
-    run_performance_analysis_on_nightly(args.package_id, args.path_to_startup_script, array_of_apk_metadata)
+    run_performance_analysis_on_nightly(
+                                        FENIX_CHANNEL_TO_PKG[args.build_type],
+                                        args.path_to_startup_script,
+                                        array_of_apk_metadata,
+                                        args.build_type
+                                        )
 
     if args.cleanup is True:
         cleanup(array_of_apk_metadata)
