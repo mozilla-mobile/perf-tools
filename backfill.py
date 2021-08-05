@@ -86,7 +86,7 @@ def get_date_array_for_range(startdate, enddate):
     return [startdate + timedelta(days=i) for i in range(delta_dates)]
 
 
-def download_nightly_for_range(array_of_dates, artchitecture):
+def download_nightly_for_range(array_of_dates, architecture):
     # TODO if file exist and no -f option
     apk_metadata_array = [fetch_nightly(date, architecture) for date in array_of_dates]
     return [e for e in apk_metadata_array if e is not None]
@@ -188,7 +188,7 @@ def get_commits_for_date_range(startdate, enddate, repository_path):
 
 def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
     commit_proc = subprocess.run(
-        ["git", "rev-list", "--ancestry-path", start_commit + ".." + end_commit],
+        ["git", "rev-list", "--ancestry-path", start_commit + "^.." + end_commit],
         cwd=repository_path, capture_output=True, text=True).stdout
     commit_list = commit_proc.replace("'", "")
 
