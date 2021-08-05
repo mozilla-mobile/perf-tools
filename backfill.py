@@ -18,8 +18,8 @@ This can backfill numbers for either daily nightlys or for two commits.
 NIGHTLY_BASE_URL = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/mobile.v2.fenix.nightly.{date}."
                     + "latest.armeabi-v7a/artifacts/public%2Fbuild%2Farmeabi-v7a%2Ftarget.apk")
 BACKFILL_DIR = "backfill_output"
-DURATIONS_OUTPUT_FILE_TEMPLATE = "durations_for_{apk}.txt"
-ANALYZED_DURATIONS_FILE_TEMPLATE = "{apk_name}_perf_results.txt"
+DURATIONS_OUTPUT_FILE_TEMPLATE = "{run_number}_durations_for_{apk}.txt"
+ANALYZED_DURATIONS_FILE_TEMPLATE = "{run_number}_{apk_name}_perf_results.txt"
 
 KEY_NAME = "name"
 KEY_DATETIME = "date"
@@ -113,7 +113,7 @@ def run_measure_start_up_script(path_to_measure_start_up_script, durations_outpu
                    stdout=subprocess.PIPE, check=False)
 
 
-def analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_metadata, build_type):
+def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_script, apk_metadata, build_type):
     uninstall_apk(package_id)
 
     was_install_successful = install_apk(apk_metadata[KEY_NAME])
@@ -123,8 +123,12 @@ def analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, a
         apk_name = apk_metadata[KEY_NAME].split(".")[0]
 
         # TODO fix verify if file exist to have -f in this script
-        durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(apk=apk_name))
-        analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(apk_name=apk_name))
+        durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(
+            run_number=index,
+            apk=apk_name))
+        analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(
+            run_number=index,
+            apk_name=apk_name))
 
         run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type)
         get_result_from_durations(durations_output_path, analyzed_durations_path)
@@ -145,8 +149,8 @@ def get_result_from_durations(start_up_durations_path, analyzed_path):
 
 
 def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path, build_type):
-    for apk_path in array_of_apk_path:
-        analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_path, build_type)
+    for idx, apk_path in enumerate(array_of_apk_path):
+        analyze_nightly_for_one_build(idx, package_id, path_to_measure_start_up_script, apk_path, build_type)
 
 
 def fetch_repository(repository_path, remote_name):
@@ -231,14 +235,14 @@ def cleanup(array_of_apk_path):
 
 
 def validate_args(args):
-    if args.type == "commits" and args.fenix_path is None:
+    if args.build_source == "commitsRange" and args.repository_to_test_path is None:
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
-    if args.type == "commitsRange" and not args.startcommit and not args.endcommit:
+    if args.build_source == "commitsRange" and not args.startcommit and not args.endcommit:
         raise Exception("Running backfill with commits between two commits requires a start and end commit")
-    if args.type == "commitsRange" and not args.repository_path:
+    if args.build_source == "commitsRange" and not args.repository_to_test_path:
         raise Exception("Running backfill with any commits option " +
                         "requires a path to a repository where git can be used")
-    if args.type == "commitsRange" and not args.build_type:
+    if args.build_source == "commitsRange" and not args.release_channel:
         raise Exception("Running backfill with any commits option requires a built type")
 
 
@@ -247,23 +251,23 @@ def main():
 
     validate_args(args)
 
-    if args.type == "nightly":
+    if args.build_source == "tasklusterNightly":
         array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
         array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
-    elif args.type == "commitsRange":
+    elif args.build_source == "commitsRange":
         array_of_apk_metadata = build_apks_for_commits(
             start_commit=args.startcommit,
             end_commit=args.endcommit,
-            repository_path=args.repository_path,
-            build_type=args.build_type,
+            repository_path=args.repository_to_test_path,
+            build_type=args.release_channel,
             architecture=args.architecture,
             remote_name=args.git_remote_name if args.git_remote_name else "")
 
     run_performance_analysis_on_nightly(
-        FENIX_CHANNEL_TO_PKG[args.build_type],
+        FENIX_CHANNEL_TO_PKG[args.release_channel],
         MEASURE_START_UP_SCRIPT,
         array_of_apk_metadata,
-        args.build_type)
+        args.release_channel)
 
     if args.cleanup is True:
         cleanup(array_of_apk_metadata)
