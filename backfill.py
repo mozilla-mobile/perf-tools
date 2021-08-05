@@ -202,13 +202,15 @@ def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
 
 def build_apk_for_commit(hash, repository_path, build_type):
     checkout_proc = subprocess.run(["git", "checkout", hash], cwd=repository_path, capture_output=True)
-    assemble_proc = subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path, capture_output=True)
 
     if checkout_proc.returncode != 0:
         print(("\n\nSomething went wrong while checking out this commit: {commit} . The associated error message was:"
                "\n\n {error}".format(commit=hash, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
               file=sys.stderr)
-    elif assemble_proc.returncode != 0:
+
+    assemble_proc = subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path, capture_output=True)
+
+    if assemble_proc.returncode != 0:
         print(("\n\nSomething went wrong while assembling this build: {build} . The associated error message was:"
                "\n\n {error}".format(build=build_type, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
               file=sys.stderr)
