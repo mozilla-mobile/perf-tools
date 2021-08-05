@@ -189,8 +189,7 @@ def get_commits_for_date_range(startdate, enddate, repository_path):
 def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
     commit_proc = subprocess.run(
         ["git", "rev-list", "--ancestry-path", start_commit + "^.." + end_commit],
-        cwd=repository_path, capture_output=True, text=True).stdout
-    commit_list = commit_proc.replace("'", "")
+        cwd=repository_path, capture_output=True, text=True)
 
     if commit_proc.returncode != 0:
         print(("\n\nSomething went wrong while checking out this commit range: {start}..{end}" +
@@ -198,7 +197,7 @@ def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
                 start=start_commit, end=end_commit, error=commit_proc.stderr.decode('utf-8').strip("\n"))),
               file=sys.stderr)
 
-    return commit_list.split("\n")
+    return [e for e in commit_proc.stdout.split("\n") if e]
 
 
 def build_apk_for_commit(hash, repository_path, build_type):
