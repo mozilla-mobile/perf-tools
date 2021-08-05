@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
-    parser.add_argument("-t", "--type", required=True, choices=["nightly", "commitsRange"],
+    parser.add_argument("build_source", required=True, choices=["tasklusterNightly", "commitsRange"],
                         help="The type of system the backfill should run performance analysis on.The commitsRange" +
                         "will get commits between two commits")
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
@@ -54,7 +54,6 @@ def parse_args():
                         help="end date to backfill until.If empty, default will be the current date")
     parser.add_argument("--startcommit", help="Oldest commit to build.")
     parser.add_argument("--endcommit", help="Last commit to run performance analysis")
-    parser.add_argument("--repo_branch",  help="Branch to run this script on.")
     parser.add_argument("--git_remote_name",  help="If this needs to run on a remote repository, pass the name here")
     parser.add_argument("-r", "--repository_path",
                         help="Path to the repository where the commits will be gotten from")
@@ -150,39 +149,15 @@ def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_scr
         analyze_nightly_for_one_build(package_id, path_to_measure_start_up_script, apk_path, build_type)
 
 
-def checkout_repository_to_correct_branch(repository_path, branch, remote_name):
+def fetch_repository(repository_path, remote_name):
     remote_repo_name = "upstream" if len(remote_name) == 0 else remote_name
-    branch = "main" if len(branch) == 0 else branch
 
     fetch_proc = subprocess.run(["git", "fetch", remote_repo_name], cwd=repository_path, capture_output=True)
-    checkout_proc = subprocess.run(["git", "checkout", remote_repo_name + "/" + branch],
-                                   cwd=repository_path, capture_output=True)
 
     if fetch_proc.returncode != 0:
         print(("\n\nSomething went wrong while fetching this repostirory: {repo} . The associated error message was:"
                "\n\n {error}".format(repo=repository_path, error=fetch_proc.stderr.decode('utf-8').strip("\n"))),
               file=sys.stderr)
-
-    elif checkout_proc.returncode != 0:
-        print(("\n\nSomething went wrong while checking out this branch: {br} . The associated error message was:"
-               "\n\n {error}".format(br=branch, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
-              file=sys.stderr)
-
-
-def get_commits_for_date_range(startdate, enddate, repository_path):
-    commit_proc = subprocess.run(
-        ["git", "log", "--since={start}".format(start=startdate),
-         "--until={end}".format(end=enddate), "--pretty=format:'%H'"],
-        cwd=repository_path, capture_output=True, text=True).stdout
-
-    if commit_proc.returncode != 0:
-        print(("\n\nSomething went wrong while checking out this commit range: {start}..{end}" +
-               "The associated error message was:\n\n {error}".format(
-                start=startdate, end=enddate, error=commit_proc.stderr.decode('utf-8').strip("\n"))),
-              file=sys.stderr)
-
-    commit_string = proc.replace("'", "")
-    return commit_string.split("\n")
 
 
 def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
@@ -233,10 +208,10 @@ def move_apk_to_cwd(apk_path, commit_hash):
 
 def build_apks_for_commits(
         start_commit=None, end_commit=None, repository_path=None,
-        build_type=None, architecture=None, branch="", remote_name=""):
+        build_type=None, architecture=None, remote_name=""):
     apk_metadata_array = []
 
-    checkout_repository_to_correct_branch(repository_path, branch, remote_name)
+    fetch_repository(repository_path, remote_name)
     array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
     for commit in array_of_commit_hash:
         build_apk_for_commit(commit, repository_path, build_type)
@@ -282,7 +257,6 @@ def main():
             repository_path=args.repository_path,
             build_type=args.build_type,
             architecture=args.architecture,
-            branch=args.branch if args.branch else "",
             remote_name=args.git_remote_name if args.git_remote_name else "")
 
     run_performance_analysis_on_nightly(
