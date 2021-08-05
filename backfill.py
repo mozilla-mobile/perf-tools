@@ -217,9 +217,9 @@ def build_apk_for_commit(hash, repository_path, build_type):
 
 
 def build_apk_path_string(repository_path, build_type, phone_architecture):
-    build_apk_destination = repository_path + "/app/build/outputs/apk/" + build_type + "/"
     apk_name = "app-" + phone_architecture + "-" + build_type + ".apk"
-    return build_apk_destination + apk_name
+    build_apk_destination = os.path.join(repository_path, "app", "build", "outputs", "apk", build_type, apk_name)
+    return build_apk_destination
 
 
 def move_apk_to_cwd(apk_path, commit_hash):
