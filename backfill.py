@@ -41,9 +41,9 @@ def parse_args():
 
     parser.add_argument("path_to_startup_script",
                         help="Path to the measure_start_up.py script needed to gather startupperformance metrics")
-    parser.add_argument("build_type", choices=["nightly", "beta", "release", "debug"],
+    parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
-    parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a-"])
+    parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
     parser.add_argument("-t", "--type", required=True, choices=["nightly", "commitsDate", "commitsRange"],
                         help="The type of system the backfill should run performance analysis on. commitsDate option" +
                         "will get commits between two dates whereas the commitsRange will get commits between two" +
