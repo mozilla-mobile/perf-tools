@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
-    parser.add_argument("build_source", required=True, choices=["tasklusterNightly", "commitsRange"],
+    parser.add_argument("build_source", choices=["tasklusterNightly", "commitsRange"],
                         help="The type of system the backfill should run performance analysis on.The commitsRange" +
                         "will get commits between two commits")
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
