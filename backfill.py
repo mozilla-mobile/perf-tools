@@ -35,12 +35,12 @@ FENIX_CHANNEL_TO_PKG = {
     'debug': 'org.mozilla.fenix.debug'
 }
 
+MEASURE_START_UP_SCRIPT = "./measure_start_up.py"
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=DESCRIPTION)
 
-    parser.add_argument("path_to_startup_script",
-                        help="Path to the measure_start_up.py script needed to gather startupperformance metrics")
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
@@ -55,7 +55,7 @@ def parse_args():
     parser.add_argument("--startcommit", help="Oldest commit to build.")
     parser.add_argument("--endcommit", help="Last commit to run performance analysis")
     parser.add_argument("--git_remote_name",  help="If this needs to run on a remote repository, pass the name here")
-    parser.add_argument("-r", "--repository_path",
+    parser.add_argument("--repository_to_test_path",
                         help="Path to the repository where the commits will be gotten from")
     parser.add_argument("-c", "--cleanup", action="store_true",
                         help="Remove all apks downloaded since they can takeup lots of space")
@@ -261,7 +261,7 @@ def main():
 
     run_performance_analysis_on_nightly(
         FENIX_CHANNEL_TO_PKG[args.build_type],
-        args.path_to_startup_script,
+        MEASURE_START_UP_SCRIPT,
         array_of_apk_metadata,
         args.build_type)
 
