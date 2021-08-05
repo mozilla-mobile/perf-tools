@@ -44,10 +44,9 @@ def parse_args():
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
-    parser.add_argument("-t", "--type", required=True, choices=["nightly", "commitsDate", "commitsRange"],
-                        help="The type of system the backfill should run performance analysis on. commitsDate option" +
-                        "will get commits between two dates whereas the commitsRange will get commits between two" +
-                        "commits")
+    parser.add_argument("-t", "--type", required=True, choices=["nightly", "commitsRange"],
+                        help="The type of system the backfill should run performance analysis on.The commitsRange" +
+                        "will get commits between two commits")
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
                         help="Date to start the backfill")
     parser.add_argument("--enddate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
@@ -233,16 +232,12 @@ def move_apk_to_cwd(apk_path, commit_hash):
 
 
 def build_apks_for_commits(
-        startdate=None, enddate=None, start_commit=None, end_commit=None, repository_path=None,
+        start_commit=None, end_commit=None, repository_path=None,
         build_type=None, architecture=None, branch="", remote_name=""):
     apk_metadata_array = []
 
     checkout_repository_to_correct_branch(repository_path, branch, remote_name)
-
-    if startdate is None:
-        array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
-    else:
-        array_of_commit_hash = get_commits_for_date_range(startdate, enddate, repository_path)
+    array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
     for commit in array_of_commit_hash:
         build_apk_for_commit(commit, repository_path, build_type)
         built_apk_name = build_apk_path_string(repository_path, build_type, architecture)
@@ -263,14 +258,12 @@ def cleanup(array_of_apk_path):
 def validate_args(args):
     if args.type == "commits" and args.fenix_path is None:
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
-    if args.type == "commitsDate" and not args.startdate:
-        raise Exception("Running backfill with commits between two date requires a start date")
     if args.type == "commitsRange" and not args.startcommit and not args.endcommit:
         raise Exception("Running backfill with commits between two commits requires a start and end commit")
-    if (args.type == "commitsRange" or args.type == "commitsDate") and not args.repository_path:
+    if args.type == "commitsRange" and not args.repository_path:
         raise Exception("Running backfill with any commits option " +
                         "requires a path to a repository where git can be used")
-    if (args.type == "commitsRange" or args.type == "commitsDate") and not args.build_type:
+    if args.type == "commitsRange" and not args.build_type:
         raise Exception("Running backfill with any commits option requires a built type")
 
 
@@ -282,16 +275,7 @@ def main():
     if args.type == "nightly":
         array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
         array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
-    elif args.type == "commitsDate":
-        array_of_apk_metadata = build_apks_for_commits(
-            startdate=args.startdate,
-            enddate=args.enddate,
-            repository_path=args.repository_path,
-            build_type=args.build_type,
-            architecture=args.architecture,
-            branch=args.branch if args.branch else "",
-            remote_name=args.git_remote_name if args.git_remote_name else "")
-    else:
+    elif args.type == "commitsRange":
         array_of_apk_metadata = build_apks_for_commits(
             start_commit=args.startcommit,
             end_commit=args.endcommit,
