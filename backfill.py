@@ -217,7 +217,7 @@ def build_apk_for_commit(hash, repository_path, build_type):
 
 
 def build_apk_path_string(repository_path, build_type, phone_architecture):
-    apk_name = "app-" + phone_architecture + "-" + build_type + ".apk"
+    apk_name = "app-{phone_arch}-{build_type}.apk".format(phone_arch=phone_architecture, build_type=build_type)
     build_apk_destination = os.path.join(repository_path, "app", "build", "outputs", "apk", build_type, apk_name)
     return build_apk_destination
 
