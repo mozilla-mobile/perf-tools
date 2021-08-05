@@ -260,6 +260,8 @@ def cleanup(array_of_apk_path):
 
 
 def validate_args(args):
+    if args.type == "commits" and args.fenix_path is None:
+        raise Exception("Provide the path to your fenix repository to run this script with the commits option")
     if args.type == "commitsDate" and not args.startdate:
         raise Exception("Running backfill with commits between two date requires a start date")
     if args.type == "commitsRange" and not args.startcommit and not args.endcommit:
@@ -273,8 +275,6 @@ def validate_args(args):
 
 def main():
     args = parse_args()
-    if args.type == "commits" and args.fenix_path is None:
-        raise Exception("Provide the path to your fenix repository to run this script with the commits option")
 
     validate_args(args)
 
