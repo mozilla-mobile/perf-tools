@@ -44,7 +44,7 @@ def parse_args():
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
-    parser.add_argument("build_source", choices=["tasklusterNightly", "commitsRange"],
+    parser.add_argument("build_source", choices=["taskclusterNightly", "commitsRange"],
                         help="The type of system the backfill should run performance analysis on.The commitsRange" +
                         "will get commits between two commits")
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
@@ -185,6 +185,7 @@ def build_apk_for_commit(hash, repository_path, build_type):
         print(("\n\nSomething went wrong while checking out this commit: {commit} . The associated error message was:"
                "\n\n {error}".format(commit=hash, error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
               file=sys.stderr)
+        return
 
     assemble_proc = subprocess.run(["./gradlew", "assemble"+build_type], cwd=repository_path, capture_output=True)
 
@@ -239,11 +240,6 @@ def validate_args(args):
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
     if args.build_source == "commitsRange" and not args.startcommit and not args.endcommit:
         raise Exception("Running backfill with commits between two commits requires a start and end commit")
-    if args.build_source == "commitsRange" and not args.repository_to_test_path:
-        raise Exception("Running backfill with any commits option " +
-                        "requires a path to a repository where git can be used")
-    if args.build_source == "commitsRange" and not args.release_channel:
-        raise Exception("Running backfill with any commits option requires a built type")
 
 
 def main():
@@ -251,7 +247,7 @@ def main():
 
     validate_args(args)
 
-    if args.build_source == "tasklusterNightly":
+    if args.build_source == "taskclusterNightly":
         array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
         array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
     elif args.build_source == "commitsRange":
