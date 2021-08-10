@@ -3,6 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
+from datetime import datetime
 import statistics
 
 
@@ -24,6 +25,16 @@ def percent_difference(v1, v2):
     numerator = abs(v1 - v2)
     denominator = statistics.mean([v1, v2])
     return abs(numerator / denominator) * 100
+
+
+def screenrecord_timestamp_diff(start_str, end_str):
+    """Measures the difference between two timestamps taken from
+    `adb shell screenrecord --bugreport`. Sample timestamp: 14:42:18.291
+    """
+    def to_datetime(s):
+        return datetime.strptime(s + '000', '%H:%M:%S.%f')  # + '000' so to micros
+    diff = to_datetime(end_str) - to_datetime(start_str)
+    return diff.total_seconds() * 1000  # returning millis.
 
 
 def main():
