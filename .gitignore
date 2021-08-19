@@ -1,2 +1,10 @@
+# dev environment
 venv/
-.vscode
+.vscode/
+
+# backfill artifacts
+*.apk
+backfill_output/
+
+# secrets
+.backfill_secrets.json
