@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+"""A script to upload our backfill perf test data to grafana.
+We use a standalone script because we may not wish to upload every
+time we run backfill (e.g. when we identify regressions or test the system).
+"""
+
+import argparse
+import ast
+import backfill
+from datetime import datetime
+import json
+import os
+import sys
+import re
+import urllib
+
+PATH_SECRETS = '.backfill_secrets.json'
+SECRETS_KEY_AUTH = 'AUTH'
+
+DBI = 'performance'
+DBHOST = "hilldale-b40313e5.influxcloud.net"
+URL = "https://{DBHOST}:8086/api/v2/write?bucket={DBI}&precision=s".format(DBHOST=DBHOST, DBI=DBI)
+
+KEY_MEDIAN = 'median'
+KEY_TIMESTAMP_DATETIME = 'apk_timestamp_datetime'
+KEY_TIMESTAMP_EPOCH = 'apk_timestamp_epoch'
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dry-run', action="store_true")
+    return parser.parse_args()
+
+
+def get_secrets():
+    with open(PATH_SECRETS) as f:
+        secrets = json.load(f)
+    assert secrets.get(SECRETS_KEY_AUTH), 'Please supply authorization token in {}'.format(PATH_SECRETS)
+    return secrets
+
+
+def find_perf_result_files_to_upload():
+    return [os.path.join(backfill.BACKFILL_DIR, f) for f in os.listdir(backfill.BACKFILL_DIR) if 'perf_results' in f]
+
+
+def get_perf_results_to_upload(perf_result_file_paths):
+    output_results = []
+    for path in perf_result_file_paths:
+        with open(path) as f:
+            perf_result = ast.literal_eval(f.read())
+
+        # Append the date to the object so it's easier to upload. Since we only record the date,
+        # we set the time to a constant for consistency between uploads.
+        date_str = re.search(r'(\d{4}_\d{2}_\d{2})', path).group(1)  # ex: 0_nightly_2021_01_01_perf_results.txt
+        date = datetime.strptime(date_str + ' 12:00:01', '%Y_%m_%d %H:%M:%S')
+        perf_result[KEY_TIMESTAMP_DATETIME] = date
+        perf_result[KEY_TIMESTAMP_EPOCH] = round(date.timestamp())
+        output_results.append(perf_result)
+    return output_results
+
+
+def upload(perf_result, auth_token, is_dry_run):
+    date_str = perf_result[KEY_TIMESTAMP_DATETIME].strftime('%Y-%m-%d')
+
+    def print_failure(e):
+        print('Request for {date} failed:'.format(date=date_str), sys.stderr)
+        if e:
+            print(e, file=sys.stderr)
+
+    # I think this data upload format is from prometheus:
+    # https://prometheus.io/docs/instrumenting/exposition_formats/#comments-help-text-and-type-information
+    #
+    # But I don't know why we can upload seconds here when prometheus asks for ms.
+    req_data = '{metric},device={device},product={product} value={value} {timestamp}'.format(
+        metric="backfill-cold-view-nav-start",
+        device="moto-g5",
+        product="fenix-nightly",
+        value=perf_result[KEY_MEDIAN],
+        timestamp=perf_result[KEY_TIMESTAMP_EPOCH],
+    )
+    headers = {'Authorization': auth_token}
+
+    if is_dry_run:
+        print('Would attempt to upload data for date {}:\n  {}'.format(date_str, req_data))
+        return
+
+    request = urllib.request.Request(url=URL, headers=headers, data=bytes(req_data, 'utf-8'))
+    try:
+        with urllib.request.urlopen(request) as res:
+            res_body = res.read()
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        print_failure(e)
+
+    if 200 <= res.status < 300:
+        print("Uploaded results for {date}".format(date=date_str))
+    else:
+        print_failure('Response for {date} was not HTTP success. Was {status}'.format(date=date_str, status=res.status))
+
+
+def main():
+    args = parse_args()
+    if args.dry_run:
+        print("dry run selected: results will not be uploaded.")
+
+    secrets = get_secrets()
+
+    perf_result_file_paths = find_perf_result_files_to_upload()
+    perf_results = get_perf_results_to_upload(perf_result_file_paths)
+    for result in perf_results:
+        upload(result, secrets[SECRETS_KEY_AUTH], args.dry_run)
+
+
+if __name__ == '__main__':
+    main()
