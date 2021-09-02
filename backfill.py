@@ -93,8 +93,8 @@ def download_nightly_for_range(array_of_dates, architecture):
 def install_apk(apk_build_path):
     install_proc = subprocess.run(["adb", "install", apk_build_path], check=False, capture_output=True)
     if install_proc.returncode != 0:
-        print(("\n\nSomething went wrong while installing the following apk: {apk} . The associated error message was:"
-               "\n\n {error}".format(apk=apk_build_path, error=install_proc.stderr.strip(b'\n'))),
+        print(("\nUnable to install: {apk}. The associated error message was:\n"
+               "{error}".format(apk=apk_build_path, error=install_proc.stderr.decode('utf-8'))),
               file=sys.stderr)
         return False
     return True
@@ -103,8 +103,8 @@ def install_apk(apk_build_path):
 def uninstall_apk(package_id):
     uninstall_proc = subprocess.run(["adb", "uninstall", package_id], check=False, capture_output=True)
     if uninstall_proc.returncode != 0:
-        print(("\n\nSomething with the uninstalling {package_id} went wrong. The associated error message was:\n\n"
-               " {error}".format(package_id=package_id, error=uninstall_proc.stderr.strip(b"\n"))),
+        print(("\nUnable to uninstall {package_id}. The associated error message was:\n"
+               "{error}".format(package_id=package_id, error=uninstall_proc.stderr.decode('utf-8'))),
               file=sys.stderr)
 
 
