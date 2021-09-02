@@ -9,6 +9,7 @@ import analyze_durations
 import os
 import sys
 import measure_start_up
+import time
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -133,6 +134,25 @@ def clear_app_data(package_id):
               file=sys.stderr)
 
 
+def maybe_skip_onboarding(package_id, test_name):
+    # Onboarding only visibly gets in the way of our MAIN test results.
+    if test_name not in {measure_start_up.TEST_COLD_MAIN_FF, measure_start_up.TEST_COLD_MAIN_RESTORE}:
+        return
+
+    # This sets mutable state so we only need to pass this flag once, before we start the actual test.
+    start_proc = subprocess.run(['adb', 'shell', 'am', 'start-activity', '-W',
+                                 '-a', 'android.intent.action.MAIN',
+                                 '--ez', 'performancetest', 'true',  # Skip onboarding.
+                                 '-n' '{}/org.mozilla.fenix.App'.format(package_id)],
+                                check=False, capture_output=True)
+    if start_proc.returncode != 0:
+        print(("\nUnable to skip onboarding. The associated error message was:\n"
+               "{error}".format(error=start_proc.stderr.decode('utf-8'))),
+              file=sys.stderr)
+
+    time.sleep(4)  # ensure skip onboarding call has time to propagate.
+
+
 def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name):
     subprocess.run([path_to_measure_start_up_script, build_type, test_name, durations_output_path],
                    stdout=subprocess.PIPE, check=False)
@@ -152,6 +172,7 @@ def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_sc
             print("Running {test_name} on {apk_name}...".format(test_name=test_name, apk_name=apk_name))
 
             clear_app_data(package_id)  # Don't maintain state between tests.
+            maybe_skip_onboarding(package_id, test_name)
 
             # TODO fix verify if file exist to have -f in this script
             durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(
