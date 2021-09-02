@@ -19,8 +19,9 @@ This can backfill numbers for either daily nightlys or for two commits.
 NIGHTLY_BASE_URL = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/mobile.v2.fenix.nightly.{date}."
                     + "latest.armeabi-v7a/artifacts/public%2Fbuild%2Farmeabi-v7a%2Ftarget.apk")
 BACKFILL_DIR = "backfill_output"
-DURATIONS_OUTPUT_FILE_TEMPLATE = "{run_number}_durations_for_{apk}.txt"
-ANALYZED_DURATIONS_FILE_TEMPLATE = "{run_number}_{apk_name}_perf_results.txt"
+
+DURATIONS_OUTPUT_FILE_TEMPLATE = "{run_number}-{apk_name}-{test_name}-durations.txt"
+ANALYZED_DURATIONS_FILE_TEMPLATE = "{run_number}-{apk_name}-{test_name}-analysis.txt"
 
 BUILD_SRC_TASKCLUSTER = "taskclusterNightly"
 BUILD_SRC_COMMITS = "commitsRange"
@@ -124,30 +125,41 @@ def uninstall_apk(package_id):
               file=sys.stderr)
 
 
-def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type):
-    subprocess.run([path_to_measure_start_up_script, build_type, "cold_view_nav_start", durations_output_path],
+def clear_app_data(package_id):
+    clear_proc = subprocess.run(['adb', 'shell', 'pm', 'clear', package_id], check=False, capture_output=True)
+    if clear_proc.returncode != 0:
+        print(("\nUnable to clear app data for {package_id}. The associated error message was:\n"
+               "{error}".format(package_id=package_id, error=clear_proc.stderr.decode('utf-8'))),
+              file=sys.stderr)
+
+
+def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name):
+    subprocess.run([path_to_measure_start_up_script, build_type, test_name, durations_output_path],
                    stdout=subprocess.PIPE, check=False)
 
 
-def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_script, apk_metadata, build_type):
+def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_script, apk_metadata, build_type, tests):
     uninstall_apk(package_id)
 
+    print("Installing {}...".format(apk_metadata[KEY_NAME]))
     was_install_successful = install_apk(apk_metadata[KEY_NAME])
     if was_install_successful:
         Path(BACKFILL_DIR).mkdir(parents=True, exist_ok=True)
 
         apk_name = apk_metadata[KEY_NAME].split(".")[0]
 
-        # TODO fix verify if file exist to have -f in this script
-        durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(
-            run_number=index,
-            apk=apk_name))
-        analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(
-            run_number=index,
-            apk_name=apk_name))
+        for test_name in tests:
+            print("Running {test_name} on {apk_name}...".format(test_name=test_name, apk_name=apk_name))
 
-        run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type)
-        get_result_from_durations(durations_output_path, analyzed_durations_path)
+            clear_app_data(package_id)  # Don't maintain state between tests.
+
+            # TODO fix verify if file exist to have -f in this script
+            durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(
+                run_number=index, apk_name=apk_name, test_name=test_name))
+            analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(
+                run_number=index, apk_name=apk_name, test_name=test_name))
+            run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name)
+            get_result_from_durations(durations_output_path, analyzed_durations_path)
 
 
 def get_result_from_durations(start_up_durations_path, analyzed_path):
@@ -164,9 +176,10 @@ def get_result_from_durations(start_up_durations_path, analyzed_path):
     analyze_durations.save_output(stats, analyzed_path)
 
 
-def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path, build_type):
+def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path, build_type,
+                                        tests):
     for idx, apk_path in enumerate(array_of_apk_path):
-        analyze_nightly_for_one_build(idx, package_id, path_to_measure_start_up_script, apk_path, build_type)
+        analyze_nightly_for_one_build(idx, package_id, path_to_measure_start_up_script, apk_path, build_type, tests)
 
 
 def fetch_repository(repository_path, remote_name):
@@ -280,7 +293,8 @@ def main():
         FENIX_CHANNEL_TO_PKG[args.release_channel],
         MEASURE_START_UP_SCRIPT,
         array_of_apk_metadata,
-        args.release_channel)
+        args.release_channel,
+        args.tests)
 
     if args.cleanup is True:
         cleanup(array_of_apk_metadata)
