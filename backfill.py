@@ -32,6 +32,7 @@ KEY_NAME = "name"
 KEY_DATETIME = "date"
 KEY_COMMIT = "commit"
 KEY_ARCHITECTURE = "architecture"
+KEY_TEST_NAME = "test_name"
 
 DATETIME_FORMAT = "%Y.%m.%d"
 
@@ -180,10 +181,10 @@ def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_sc
             analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(
                 run_number=index, apk_name=apk_name, test_name=test_name))
             run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name)
-            get_result_from_durations(durations_output_path, analyzed_durations_path)
+            get_result_from_durations(durations_output_path, analyzed_durations_path, test_name)
 
 
-def get_result_from_durations(start_up_durations_path, analyzed_path):
+def get_result_from_durations(start_up_durations_path, analyzed_path, test_name):
     try:
         filetype = analyze_durations.detect_filetype(start_up_durations_path)
     except FileNotFoundError:
@@ -194,6 +195,7 @@ def get_result_from_durations(start_up_durations_path, analyzed_path):
 
     measurement_arr = filetype.read_from(start_up_durations_path)
     stats = analyze_durations.to_stats(measurement_arr)
+    stats[KEY_TEST_NAME] = test_name
     analyze_durations.save_output(stats, analyzed_path)
 
 
