@@ -21,6 +21,10 @@ BACKFILL_DIR = "backfill_output"
 DURATIONS_OUTPUT_FILE_TEMPLATE = "{run_number}_durations_for_{apk}.txt"
 ANALYZED_DURATIONS_FILE_TEMPLATE = "{run_number}_{apk_name}_perf_results.txt"
 
+BUILD_SRC_TASKCLUSTER = "taskclusterNightly"
+BUILD_SRC_COMMITS = "commitsRange"
+BUILD_SRC_ALL = [BUILD_SRC_TASKCLUSTER, BUILD_SRC_COMMITS]
+
 KEY_NAME = "name"
 KEY_DATETIME = "date"
 KEY_COMMIT = "commit"
@@ -44,8 +48,8 @@ def parse_args():
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
-    parser.add_argument("build_source", choices=["taskclusterNightly", "commitsRange"],
-                        help="The type of system the backfill should run performance analysis on.The commitsRange" +
+    parser.add_argument("build_source", choices=BUILD_SRC_ALL,
+                        help="The type of system the backfill should run performance analysis on. The commitsRange" +
                         "will get commits between two commits")
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
                         help="Date to start the backfill")
@@ -236,21 +240,20 @@ def cleanup(array_of_apk_path):
 
 
 def validate_args(args):
-    if args.build_source == "commitsRange" and args.repository_to_test_path is None:
+    if args.build_source == BUILD_SRC_COMMITS and args.repository_to_test_path is None:
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
-    if args.build_source == "commitsRange" and not args.startcommit and not args.endcommit:
+    if args.build_source == BUILD_SRC_COMMITS and not args.startcommit and not args.endcommit:
         raise Exception("Running backfill with commits between two commits requires a start and end commit")
 
 
 def main():
     args = parse_args()
-
     validate_args(args)
 
-    if args.build_source == "taskclusterNightly":
+    if args.build_source == BUILD_SRC_TASKCLUSTER:
         array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
         array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
-    elif args.build_source == "commitsRange":
+    elif args.build_source == BUILD_SRC_COMMITS:
         array_of_apk_metadata = build_apks_for_commits(
             start_commit=args.startcommit,
             end_commit=args.endcommit,
