@@ -71,6 +71,7 @@ def fetch_nightly(download_date, architecture):
     download_date_string = datetime.strftime(download_date, DATETIME_FORMAT)
     nightly_url = NIGHTLY_BASE_URL.format(date=download_date_string)
     filename = "nightly_" + download_date_string.replace(".", "_") + ".apk"
+    print("Fetching {}...".format(filename), end="", flush=True)
     try:
         urllib.request.urlretrieve(nightly_url, filename=filename)
     except urllib.error.HTTPError as err:
@@ -78,6 +79,8 @@ def fetch_nightly(download_date, architecture):
             print("\n\nThe apk for {date} is not available at this {url}".format(date=download_date, url=nightly_url),
                   file=sys.stderr)
         return None
+
+    print(" Success.")
 
     # TODO: Could add build type, architecture, etc...
     return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: "", KEY_ARCHITECTURE: architecture}
