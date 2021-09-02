@@ -8,6 +8,7 @@ import subprocess
 import analyze_durations
 import os
 import sys
+import measure_start_up
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -45,12 +46,19 @@ MEASURE_START_UP_SCRIPT = "./measure_start_up.py"
 def parse_args():
     parser = argparse.ArgumentParser(description=DESCRIPTION)
 
+    # We try to match the argument ordering with measure_start_up.py.
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
                         help="The firefox build to run performance analysis on")
     parser.add_argument("architecture", choices=["armeabi-v7a", "arm64-v8a"])
     parser.add_argument("build_source", choices=BUILD_SRC_ALL,
                         help="The type of system the backfill should run performance analysis on. The commitsRange" +
                         "will get commits between two commits")
+
+    # I think this would be more natural as a positional, comma-separated list but argparse doesn't support it.
+    parser.add_argument("--tests", nargs="+", choices=measure_start_up.TESTS, required=True,
+                        help=("the test(s) to run: see `python3 measure_start_up.py --help` for details on the tests. "
+                              "This flag should be specified once with space-separated arguments."))
+
     parser.add_argument("--startdate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
                         help="Date to start the backfill")
     parser.add_argument("--enddate", type=lambda date: datetime.strptime(date, DATETIME_FORMAT),
@@ -58,6 +66,7 @@ def parse_args():
                         help="end date to backfill until.If empty, default will be the current date")
     parser.add_argument("--startcommit", help="Oldest commit to build.")
     parser.add_argument("--endcommit", help="Last commit to run performance analysis")
+
     parser.add_argument("--git_remote_name",  help="If this needs to run on a remote repository, pass the name here")
     parser.add_argument("--repository_to_test_path",
                         help="Path to the repository where the commits will be gotten from")
