@@ -240,6 +240,8 @@ def cleanup(array_of_apk_path):
 
 
 def validate_args(args):
+    if args.build_source == BUILD_SRC_TASKCLUSTER and args.startdate is None:
+        raise Exception("A start date is required to run using taskcluster builds")
     if args.build_source == BUILD_SRC_COMMITS and args.repository_to_test_path is None:
         raise Exception("Provide the path to your fenix repository to run this script with the commits option")
     if args.build_source == BUILD_SRC_COMMITS and not args.startcommit and not args.endcommit:
