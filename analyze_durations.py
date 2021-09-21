@@ -32,7 +32,8 @@ LOGCAT_EXPECTED_FORMAT = '2020-05-04 15:15:50.340 10845-10845/? E/lol: average 3
 
 def parse_args():
     parser = argparse.ArgumentParser(description=DESC, formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument("path", help="""path to a file with duration measurements. The following formats are supported:
+    parser.add_argument("path", nargs="+",
+                        help="""path to a file with duration measurements. The following formats are supported:
 - durations separated by newlines
 - perfherder-data-json output from mozperftest VIEW
 - logcat where some lines have a logged value of 'average <duration>'
@@ -55,6 +56,18 @@ This is useful to avoid accidentally deleting results.""")
         "--print-github-table-row", action="store_true", help="prints the result formatted as a GitHub table row"
     )
     return parser.parse_args()
+
+
+def validate_args(args):
+    if args.output_safe and len(args.path) > 1:
+        print("--output_safe cannot be combined with multiple path arguments.", file=sys.stderr)
+        sys.exit(1)
+    if args.print_github_table_row and len(args.path) > 1:
+        print("--print-github-table-row cannot be combined with multiple path arguments.", file=sys.stderr)
+        sys.exit(1)
+    if args.graph and len(args.path) > 1:
+        print("--graph cannot be combined with multiple path arguments.", file=sys.stderr)
+        sys.exit(1)
 
 
 def detect_filetype(path):
@@ -145,6 +158,16 @@ def print_stats(stats, stream=None):
     pprint(stats, compact=True, stream=stream)
 
 
+def maybe_print_header(num_path_to_print, path):
+    # We don't want to print the filename header if we're only printing one value.
+    if num_path_to_print < 1:
+        return
+
+    # For simplicity, we add a newline here rather than adding it after the stats are printed
+    # even though it puts an unnecessary newline before the first entry.
+    print("\n==> {} <==".format(path))  # Same format as `tail`
+
+
 def graph(stats):
     from matplotlib import pyplot as plt
     replicates = stats['replicates']
@@ -175,26 +198,29 @@ class InputFileType(Enum):
 
 def main():
     args = parse_args()
+    validate_args(args)
 
     if args.print_github_table_header:
         print_github_table_header()
         exit(0)
 
-    filetype = detect_filetype(args.path)
-    measurement_arr = filetype.read_from(args.path)
-    stats = to_stats(measurement_arr)
+    for path in args.path:
+        filetype = detect_filetype(path)
+        measurement_arr = filetype.read_from(path)
+        stats = to_stats(measurement_arr)
 
-    # Called before printing so if we abort, it's clearer to the user there was an error.
-    if args.output_safe:
-        save_output(stats, args.output_safe)
+        # Called before printing so if we abort, it's clearer to the user there was an error.
+        if args.output_safe:
+            save_output(stats, args.output_safe)
 
-    if args.print_github_table_row:
-        print(to_github_table_row(stats))
-    else:
-        print_stats(stats)
+        if args.print_github_table_row:
+            print(to_github_table_row(stats))
+        else:
+            maybe_print_header(len(args.path), path)
+            print_stats(stats)
 
-    if args.graph:
-        graph(stats)
+        if args.graph:
+            graph(stats)
 
 
 if __name__ == '__main__':
