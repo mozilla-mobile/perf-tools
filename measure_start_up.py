@@ -84,6 +84,9 @@ See https://wiki.mozilla.org/Performance/Fenix#Terminology for descriptions of c
     parser.add_argument("-f", "--force", action="store_true",
                         help="overwrite the given path rather than stopping on file existence")
 
+    parser.add_argument("--no-startup-cache", action="store_true",
+                        help="skips delay in the warm up run to ensure the start up cache is filled")
+
     return parser.parse_args()
 
 
@@ -158,7 +161,7 @@ def get_start_cmd(test_name, pkg_id):
     return cmd
 
 
-def measure(test_name, product, pkg_id, start_cmd_args, iter_count):
+def measure(test_name, product, pkg_id, start_cmd_args, iter_count, warmup_delay_seconds):
     # Startup profiling may accidentally be left enabled and throw off the results.
     # To prevent this, we disable it.
     disable_startup_profiling()
@@ -167,7 +170,7 @@ def measure(test_name, product, pkg_id, start_cmd_args, iter_count):
     # As such, we start it once beforehand to let it settle.
     force_stop(pkg_id)
     subprocess.run(start_cmd_args, check=True, capture_output=True)  # capture_output so no print to stdout.
-    time.sleep(5)  # To hopefully reach visual completeness.
+    time.sleep(warmup_delay_seconds)
 
     measurements = []
     for _ in range(0, iter_count):
@@ -283,6 +286,15 @@ def print_preface_text(test_name):
         print("\nWARNING: ensure at least one tab is opened when starting this test.")
 
 
+def get_warmup_delay_seconds(no_startup_cache):
+    # We've been told the start up cache is populated ~60s after first start up. As such, it's likely
+    # most users start the app with it so, if we want to measure the representative user experience,
+    # we should measure start up with the start up cache populated. We wait to ensure the cache is
+    # populated during the warm up run. If the args say we shouldn't wait, we only wait a short
+    # duration that is roughly visual completeness.
+    return 5 if no_startup_cache else 60
+
+
 def main():
     args = parse_args()
     validate_args(args)
@@ -290,7 +302,8 @@ def main():
     pkg_id = product_channel_to_pkg_id(args.product, args.release_channel)
     start_cmd = get_start_cmd(args.test_name, pkg_id)
     print_preface_text(args.test_name)
-    measurements = measure(args.test_name, args.product, pkg_id, start_cmd, args.iter_count)
+    measurements = measure(args.test_name, args.product, pkg_id, start_cmd, args.iter_count,
+                           get_warmup_delay_seconds(args.no_startup_cache))
     save_measurements(args.path, measurements)
 
 
