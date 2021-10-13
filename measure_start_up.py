@@ -127,7 +127,7 @@ def get_component_name_for_intent(pkg_id, intent):
     return stdout[1]
 
 
-def get_start_cmd(test_name, pkg_id):
+def get_start_cmd(test_name, pkg_id, product):
     intent_action_prefix = 'android.intent.action.{}'
     if test_name in [TEST_COLD_MAIN_FF, TEST_COLD_MAIN_RESTORE]:
         intent = [
@@ -149,6 +149,14 @@ def get_start_cmd(test_name, pkg_id):
         '-W',  # wait for app launch to complete before returning
         '-n', component_name
         ] + intent
+
+    # If it's focus, skip onboarding: this is not stateful so must be sent for every cold start intent.
+    # fenix is handled elsewhere (e.g. backfill.py) because it is stateful so it only needs to be sent once.
+    # Note: adding this extra unconditionally means there is no way to test onboarding perf. We can change
+    # that when we actually want to test that.
+    if product == PROD_FOCUS:
+        cmd += ['--ez', 'performancetest', 'true']
+
     return cmd
 
 
@@ -291,7 +299,7 @@ def main():
     validate_args(args)
 
     pkg_id = PROD_TO_CHANNEL_TO_PKGID[args.product][args.release_channel]
-    start_cmd = get_start_cmd(args.test_name, pkg_id)
+    start_cmd = get_start_cmd(args.test_name, pkg_id, args.product)
     print_preface_text(args.test_name)
     measurements = measure(args.test_name, args.product, pkg_id, start_cmd, args.iter_count,
                            get_warmup_delay_seconds(args.no_startup_cache))
