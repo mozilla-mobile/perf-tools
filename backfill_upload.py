@@ -89,7 +89,7 @@ def upload(perf_result, auth_token, is_dry_run):
     req_data = '{metric},device={device},product={product} value={value} {timestamp}'.format(
         metric=metric_name,
         device="moto-g5",
-        product="fenix-nightly",
+        product=perf_result[backfill.KEY_PRODUCT] + '-nightly',  # we only support nightly currently
         value=perf_result[KEY_MEDIAN],
         timestamp=perf_result[KEY_TIMESTAMP_EPOCH],
     )
