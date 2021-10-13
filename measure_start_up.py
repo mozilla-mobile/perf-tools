@@ -35,7 +35,7 @@ PROD_TO_CHANNEL_TO_PKGID[PROD_FENIX] = {
     'debug': 'org.mozilla.fenix.debug'
 }
 PROD_TO_CHANNEL_TO_PKGID[PROD_FOCUS] = {
-    'nightly': 'org.mozilla.focus',  # it seems problematic that this is the same as release.
+    'nightly': 'org.mozilla.focus.nightly',
     'beta': 'org.mozilla.focus.beta',  # only present since post-fenix update.
     'release': 'org.mozilla.focus',
     'debug': 'org.mozilla.focus.debug'
