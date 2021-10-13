@@ -11,6 +11,7 @@ import sys
 import measure_start_up
 import time
 from pathlib import Path
+from measure_start_up import PROD_TO_CHANNEL_TO_PKGID, PROD_FENIX
 from datetime import datetime, timedelta
 
 DESCRIPTION = """ Allows to get startup performance metrics between two dates.
@@ -35,13 +36,6 @@ KEY_ARCHITECTURE = "architecture"
 KEY_TEST_NAME = "test_name"
 
 DATETIME_FORMAT = "%Y.%m.%d"
-
-FENIX_CHANNEL_TO_PKG = {
-    'nightly': 'org.mozilla.fenix',
-    'beta': 'org.mozilla.firefox.beta',
-    'release': 'org.mozilla.firefox',
-    'debug': 'org.mozilla.fenix.debug'
-}
 
 MEASURE_START_UP_SCRIPT = "./measure_start_up.py"
 
@@ -313,7 +307,7 @@ def main():
             remote_name=args.git_remote_name if args.git_remote_name else "")
 
     run_performance_analysis_on_nightly(
-        FENIX_CHANNEL_TO_PKG[args.release_channel],
+        PROD_TO_CHANNEL_TO_PKGID[PROD_FENIX][args.release_channel],
         MEASURE_START_UP_SCRIPT,
         array_of_apk_metadata,
         args.release_channel,
