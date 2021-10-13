@@ -23,18 +23,22 @@ we try to keep this simple and avoid implementing all the things they do.
 
 DEFAULT_ITER_COUNT = 25
 
-FOCUS_CHANNEL_TO_PKG = {
-    'nightly': 'org.mozilla.focus',  # it seems problematic that this is the same as release.
-    'beta': 'org.mozilla.focus.beta',  # only present since post-fenix update.
-    'release': 'org.mozilla.focus',
-    'debug': 'org.mozilla.focus.debug'
-}
+PROD_FENIX = 'fenix'
+PROD_FOCUS = 'focus'
+PRODUCTS = [PROD_FENIX, PROD_FOCUS]
 
-FENIX_CHANNEL_TO_PKG = {
+PROD_TO_CHANNEL_TO_PKGID = {}
+PROD_TO_CHANNEL_TO_PKGID[PROD_FENIX] = {
     'nightly': 'org.mozilla.fenix',
     'beta': 'org.mozilla.firefox.beta',
     'release': 'org.mozilla.firefox',
     'debug': 'org.mozilla.fenix.debug'
+}
+PROD_TO_CHANNEL_TO_PKGID[PROD_FOCUS] = {
+    'nightly': 'org.mozilla.focus',  # it seems problematic that this is the same as release.
+    'beta': 'org.mozilla.focus.beta',  # only present since post-fenix update.
+    'release': 'org.mozilla.focus',
+    'debug': 'org.mozilla.focus.debug'
 }
 
 TEST_COLD_MAIN_FF = 'cold_main_first_frame'
@@ -45,17 +49,12 @@ TESTS = [TEST_COLD_MAIN_FF, TEST_COLD_MAIN_RESTORE, TEST_COLD_VIEW_FF, TEST_COLD
 
 TEST_URI = 'https://example.com'
 
-PROD_FENIX = 'fenix'
-PROD_FOCUS = 'focus'
-PRODUCTS = [PROD_FENIX, PROD_FOCUS]
-
 
 def parse_args():
     parser = argparse.ArgumentParser(description=DESC, formatter_class=argparse.RawTextHelpFormatter)
 
-    assert FENIX_CHANNEL_TO_PKG.keys() == FOCUS_CHANNEL_TO_PKG.keys(), 'should be equal to use one for choices= below'
     parser.add_argument(
-        "release_channel", choices=FENIX_CHANNEL_TO_PKG.keys(), help="the release channel to measure"
+        "release_channel", choices=PROD_TO_CHANNEL_TO_PKGID[PROD_FENIX].keys(), help="the release channel to measure"
     )
     parser.add_argument(
         "test_name", choices=TESTS, help="""the measurement methodology to use. Options:
@@ -95,14 +94,6 @@ def validate_args(args):
     if not args.force:
         if os.path.exists(args.path):
             raise Exception("Given `path` unexpectedly exists: pick a new path or use --force to overwrite.")
-
-
-def product_channel_to_pkg_id(product, channel):
-    if product == PROD_FENIX:
-        pkg_to_channel_map = FENIX_CHANNEL_TO_PKG
-    elif product == PROD_FOCUS:
-        pkg_to_channel_map = FOCUS_CHANNEL_TO_PKG
-    return pkg_to_channel_map[channel]
 
 
 def get_adb_shell_args():
@@ -299,7 +290,7 @@ def main():
     args = parse_args()
     validate_args(args)
 
-    pkg_id = product_channel_to_pkg_id(args.product, args.release_channel)
+    pkg_id = PROD_TO_CHANNEL_TO_PKGID[args.product][args.release_channel]
     start_cmd = get_start_cmd(args.test_name, pkg_id)
     print_preface_text(args.test_name)
     measurements = measure(args.test_name, args.product, pkg_id, start_cmd, args.iter_count,
