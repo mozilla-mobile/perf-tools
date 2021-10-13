@@ -11,15 +11,23 @@ import sys
 import measure_start_up
 import time
 from pathlib import Path
-from measure_start_up import PROD_TO_CHANNEL_TO_PKGID, PROD_FENIX
+from measure_start_up import PROD_TO_CHANNEL_TO_PKGID, PROD_FENIX, PROD_FOCUS
 from datetime import datetime, timedelta
 
 DESCRIPTION = """ Allows to get startup performance metrics between two dates.
 This can backfill numbers for either daily nightlys or for two commits.
 """
 
-NIGHTLY_BASE_URL = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/mobile.v2.fenix.nightly.{date}."
-                    + "latest.armeabi-v7a/artifacts/public%2Fbuild%2Farmeabi-v7a%2Ftarget.apk")
+BASE_URL_DICT = {}
+BASE_URL_DICT[PROD_FENIX] = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/"
+                             "mobile.v2.fenix.nightly.{date}.latest.armeabi-v7a/artifacts/"
+                             "public%2Fbuild%2Farmeabi-v7a%2Ftarget.apk")
+# Despite the URL including "unsigned", these are actually signed builds.
+BASE_URL_DICT[PROD_FOCUS] = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/"
+                             "mobile.v2.focus-android.nightly.{date}.latest.armeabi-v7a/artifacts/"
+                             "public%2Fbuild%2Fapp-focus-armeabi-v7a-nightly-unsigned.apk")
+
+
 BACKFILL_DIR = "backfill_output"
 
 DURATIONS_OUTPUT_FILE_TEMPLATE = "{run_number}-{apk_name}-{test_name}-durations.txt"
@@ -30,6 +38,7 @@ BUILD_SRC_COMMITS = "commitsRange"
 BUILD_SRC_ALL = [BUILD_SRC_TASKCLUSTER, BUILD_SRC_COMMITS]
 
 KEY_NAME = "name"
+KEY_PRODUCT = "product"
 KEY_DATETIME = "date"
 KEY_COMMIT = "commit"
 KEY_ARCHITECTURE = "architecture"
@@ -42,6 +51,8 @@ MEASURE_START_UP_SCRIPT = "./measure_start_up.py"
 
 def parse_args():
     parser = argparse.ArgumentParser(description=DESCRIPTION)
+
+    parser.add_argument("product", choices=[PROD_FENIX, PROD_FOCUS], help="the product to measure")
 
     # We try to match the argument ordering with measure_start_up.py.
     parser.add_argument("release_channel", choices=["nightly", "beta", "release", "debug"],
@@ -73,10 +84,10 @@ def parse_args():
     return parser.parse_args()
 
 
-def fetch_nightly(download_date, architecture):
+def fetch_nightly(download_date, architecture, product):
     download_date_string = datetime.strftime(download_date, DATETIME_FORMAT)
-    nightly_url = NIGHTLY_BASE_URL.format(date=download_date_string)
-    filename = "nightly_" + download_date_string.replace(".", "_") + ".apk"
+    nightly_url = BASE_URL_DICT[product].format(date=download_date_string)
+    filename = "{}_nightly_{}.apk".format(product, download_date_string.replace(".", "_"))
     print("Fetching {}...".format(filename), end="", flush=True)
     try:
         urllib.request.urlretrieve(nightly_url, filename=filename)
@@ -88,8 +99,8 @@ def fetch_nightly(download_date, architecture):
 
     print(" Success.")
 
-    # TODO: Could add build type, architecture, etc...
-    return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: "", KEY_ARCHITECTURE: architecture}
+    return {KEY_NAME: filename, KEY_DATETIME: download_date, KEY_COMMIT: "", KEY_ARCHITECTURE: architecture,
+            KEY_PRODUCT: product}
 
 
 def get_date_array_for_range(startdate, enddate):
@@ -97,9 +108,9 @@ def get_date_array_for_range(startdate, enddate):
     return [startdate + timedelta(days=i) for i in range(delta_dates)]
 
 
-def download_nightly_for_range(array_of_dates, architecture):
+def download_nightly_for_range(array_of_dates, architecture, product):
     # TODO if file exist and no -f option
-    apk_metadata_array = [fetch_nightly(date, architecture) for date in array_of_dates]
+    apk_metadata_array = [fetch_nightly(date, architecture, product) for date in array_of_dates]
     return [e for e in apk_metadata_array if e is not None]
 
 
@@ -129,9 +140,15 @@ def clear_app_data(package_id):
               file=sys.stderr)
 
 
-def maybe_skip_onboarding(package_id, test_name):
+def maybe_skip_onboarding(package_id, test_name, product):
+    # We skip onboarding for focus in measure_start_up.py because it's stateful and needs to be called
+    # for every cold start intent.
+    if product == PROD_FOCUS:
+        return
+
     # Onboarding only visibly gets in the way of our MAIN test results.
-    if test_name not in {measure_start_up.TEST_COLD_MAIN_FF, measure_start_up.TEST_COLD_MAIN_RESTORE}:
+    if product == PROD_FOCUS or \
+            test_name not in {measure_start_up.TEST_COLD_MAIN_FF, measure_start_up.TEST_COLD_MAIN_RESTORE}:
         return
 
     # This sets mutable state so we only need to pass this flag once, before we start the actual test.
@@ -148,12 +165,13 @@ def maybe_skip_onboarding(package_id, test_name):
     time.sleep(4)  # ensure skip onboarding call has time to propagate.
 
 
-def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name):
-    subprocess.run([path_to_measure_start_up_script, build_type, test_name, durations_output_path],
-                   stdout=subprocess.PIPE, check=False)
+def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name, product):
+    subprocess.run([path_to_measure_start_up_script, "--product=" + product, build_type, test_name,
+                    durations_output_path], stdout=subprocess.PIPE, check=False)
 
 
-def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_script, apk_metadata, build_type, tests):
+def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_script, apk_metadata, build_type, tests,
+                                  product):
     uninstall_apk(package_id)
 
     print("Installing {}...".format(apk_metadata[KEY_NAME]))
@@ -167,18 +185,19 @@ def analyze_nightly_for_one_build(index, package_id, path_to_measure_start_up_sc
             print("Running {test_name} on {apk_name}...".format(test_name=test_name, apk_name=apk_name))
 
             clear_app_data(package_id)  # Don't maintain state between tests.
-            maybe_skip_onboarding(package_id, test_name)
+            maybe_skip_onboarding(package_id, test_name, product)
 
             # TODO fix verify if file exist to have -f in this script
             durations_output_path = os.path.join(BACKFILL_DIR, DURATIONS_OUTPUT_FILE_TEMPLATE.format(
                 run_number=index, apk_name=apk_name, test_name=test_name))
             analyzed_durations_path = os.path.join(BACKFILL_DIR, ANALYZED_DURATIONS_FILE_TEMPLATE.format(
                 run_number=index, apk_name=apk_name, test_name=test_name))
-            run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name)
-            get_result_from_durations(durations_output_path, analyzed_durations_path, test_name)
+            run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name,
+                                        product)
+            get_result_from_durations(durations_output_path, analyzed_durations_path, test_name, product)
 
 
-def get_result_from_durations(start_up_durations_path, analyzed_path, test_name):
+def get_result_from_durations(start_up_durations_path, analyzed_path, test_name, product):
     try:
         filetype = analyze_durations.detect_filetype(start_up_durations_path)
     except FileNotFoundError:
@@ -190,13 +209,15 @@ def get_result_from_durations(start_up_durations_path, analyzed_path, test_name)
     measurement_arr = filetype.read_from(start_up_durations_path)
     stats = analyze_durations.to_stats(measurement_arr)
     stats[KEY_TEST_NAME] = test_name
+    stats[KEY_PRODUCT] = product
     analyze_durations.save_output(stats, analyzed_path)
 
 
 def run_performance_analysis_on_nightly(package_id, path_to_measure_start_up_script, array_of_apk_path, build_type,
-                                        tests):
+                                        tests, product):
     for idx, apk_path in enumerate(array_of_apk_path):
-        analyze_nightly_for_one_build(idx, package_id, path_to_measure_start_up_script, apk_path, build_type, tests)
+        analyze_nightly_for_one_build(idx, package_id, path_to_measure_start_up_script, apk_path, build_type, tests,
+                                      product)
 
 
 def fetch_repository(repository_path, remote_name):
@@ -282,6 +303,9 @@ def cleanup(array_of_apk_path):
 
 
 def validate_args(args):
+    if args.product == PROD_FOCUS and args.build_source == BUILD_SRC_COMMITS:
+        raise Exception("Focus with commits is not currently supported")
+
     if args.build_source == BUILD_SRC_TASKCLUSTER and args.startdate is None:
         raise Exception("A start date is required to run using taskcluster builds")
     if args.build_source == BUILD_SRC_COMMITS and args.repository_to_test_path is None:
@@ -296,7 +320,7 @@ def main():
 
     if args.build_source == BUILD_SRC_TASKCLUSTER:
         array_of_dates = get_date_array_for_range(args.startdate, args.enddate)
-        array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture)
+        array_of_apk_metadata = download_nightly_for_range(array_of_dates, args.architecture, args.product)
     elif args.build_source == BUILD_SRC_COMMITS:
         array_of_apk_metadata = build_apks_for_commits(
             start_commit=args.startcommit,
@@ -307,11 +331,12 @@ def main():
             remote_name=args.git_remote_name if args.git_remote_name else "")
 
     run_performance_analysis_on_nightly(
-        PROD_TO_CHANNEL_TO_PKGID[PROD_FENIX][args.release_channel],
+        PROD_TO_CHANNEL_TO_PKGID[args.product][args.release_channel],
         MEASURE_START_UP_SCRIPT,
         array_of_apk_metadata,
         args.release_channel,
-        args.tests)
+        args.tests,
+        args.product)
 
     if args.cleanup is True:
         cleanup(array_of_apk_metadata)
