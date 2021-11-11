@@ -26,6 +26,10 @@ BASE_URL_DICT[PROD_FENIX] = ("https://firefox-ci-tc.services.mozilla.com/api/ind
 BASE_URL_DICT[PROD_FOCUS] = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/"
                              "mobile.v2.focus-android.nightly.{date}.latest.armeabi-v7a/artifacts/"
                              "public%2Fbuild%2Fapp-focus-armeabi-v7a-nightly-unsigned.apk")
+# See usage for why this exists.
+BASE_URL_DICT[PROD_FOCUS + '-v2'] = ("https://firefox-ci-tc.services.mozilla.com/api/index/v1/task/"
+                                     "mobile.v2.focus-android.nightly.{date}.latest.armeabi-v7a/artifacts/"
+                                     "public%2Fbuild%2Ffocus%2Farmeabi-v7a%2Ftarget.apk")
 
 
 BACKFILL_DIR = "backfill_output"
@@ -84,9 +88,16 @@ def parse_args():
     return parser.parse_args()
 
 
+def get_nightly_url(download_date, download_date_str, product):
+    # The url format changed for builds after this date.
+    if product == PROD_FOCUS and download_date >= datetime(2021, 11, 5):
+        product += '-v2'
+    return BASE_URL_DICT[product].format(date=download_date_str)
+
+
 def fetch_nightly(download_date, architecture, product):
     download_date_string = datetime.strftime(download_date, DATETIME_FORMAT)
-    nightly_url = BASE_URL_DICT[product].format(date=download_date_string)
+    nightly_url = get_nightly_url(download_date, download_date_string, product)
     filename = "{}_nightly_{}.apk".format(product, download_date_string.replace(".", "_"))
     print("Fetching {}...".format(filename), end="", flush=True)
     try:
