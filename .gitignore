@@ -8,3 +8,5 @@ backfill_output/
 
 # secrets
 .backfill_secrets.json
+.google-credentials.json
+.google-token.json
