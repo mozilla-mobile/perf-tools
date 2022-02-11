@@ -190,7 +190,13 @@ def get_measurement(test_name, product, pkg_id, stdout):
     if test_name in [TEST_COLD_MAIN_FF, TEST_COLD_VIEW_FF]:
         measurement = get_measurement_from_am_start_log(stdout)
     elif test_name in [TEST_COLD_VIEW_NAV_START, TEST_COLD_MAIN_RESTORE]:
-        time.sleep(4)  # We must sleep until the navigation start event occurs.
+        # We must sleep until:
+        # - the Navigation::Start event occurs. If we don't, the script will fail.
+        # - the content process start up scripts are cached. If we don't, the cache won't be populated and we won't be
+        # measuring perf accurately. This can take up to 14s from proc start until ScriptPreloader::CacheWriteComplete
+        # is called on a Moto G5, as of Feb 11 2022. There is an explicit 10s sleep in the code:
+        # https://searchfox.org/mozilla-central/rev/fc4d4a8d01b0e50d20c238acbb1739ccab317ebc/js/xpconnect/loader/ScriptPreloader.cpp#769).
+        time.sleep(17)
         proc = subprocess.run(['adb', 'logcat', '-d'], check=True, capture_output=True)
         measurement = get_measurement_from_nav_start_logcat(product, pkg_id, proc.stdout)
     return measurement
