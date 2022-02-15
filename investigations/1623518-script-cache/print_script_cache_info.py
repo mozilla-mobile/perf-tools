@@ -64,3 +64,7 @@ print_attr('CACHED', 'PARENT', parent_cache)
 print_attr('SLOW', 'PARENT', parent_slow)
 print_attr('CACHED', 'CHILD', child_cache)
 print_attr('SLOW', 'CHILD', child_slow)
+
+# Some scripts that are cached in the parent are unexpectedly slow loaded in the child: print them.
+overlap = set(parent_cache).intersection(set(child_slow))
+print_attr('PARENT-CACHED-INTERSECT-CHILD-SLOW', 'N/A', overlap)
