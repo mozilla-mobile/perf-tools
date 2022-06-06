@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from measure_start_up import PROD_TO_CHANNEL_TO_PKGID, PROD_FENIX, PROD_FOCUS
 from datetime import datetime, timedelta
+from pathlib import Path
 
 DESCRIPTION = """ Allows to get startup performance metrics between two dates.
 This can backfill numbers for either daily nightlys or for two commits.
@@ -256,6 +257,16 @@ def get_all_commits_in_commits_range(start_commit, end_commit, repository_path):
     return [e for e in commit_proc.stdout.split("\n") if e]
 
 
+def clean_project(repository_path):
+    clean_proc = subprocess.run(["./gradlew", "clean"], cwd=repository_path, capture_output=True)
+
+    if clean_proc.returncode != 0:
+        print(("\n\nSomething went wrong while ./gradlew clean. The associated error message was:"
+               "\n\n {error}".format(error=checkout_proc.stderr.decode('utf-8').strip("\n"))),
+              file=sys.stderr)
+        return
+
+
 def build_apk_for_commit(hash, repository_path, build_type):
     checkout_proc = subprocess.run(["git", "checkout", hash], cwd=repository_path, capture_output=True)
 
@@ -296,10 +307,21 @@ def build_apks_for_commits(
 
     fetch_repository(repository_path, remote_name)
     array_of_commit_hash = get_all_commits_in_commits_range(start_commit, end_commit, repository_path)
-    for commit in array_of_commit_hash:
-        build_apk_for_commit(commit, repository_path, build_type)
-        built_apk_name = build_apk_path_string(repository_path, build_type, architecture)
-        new_apk_name = move_apk_to_cwd(built_apk_name, commit)
+    clean_project(repository_path)
+
+    numer_of_commits = len(array_of_commit_hash)
+    for index, commit in enumerate(array_of_commit_hash):
+        print(f'##### Trying to build {index+1} of {numer_of_commits} Actual commit {commit} #####')
+        new_apk_name = "apk_commit_" + commit + ".apk"
+        apk_for_commit_already_exists = Path(new_apk_name).exists()
+
+        if not apk_for_commit_already_exists:
+            build_apk_for_commit(commit, repository_path, build_type)
+            built_apk_name = build_apk_path_string(repository_path, build_type, architecture)
+            new_apk_name = move_apk_to_cwd(built_apk_name, commit)
+        else:
+            print(f'     SKIPED build for commit {commit}, apk already exists')
+
         apk_metadata_array.append({
             KEY_NAME: new_apk_name,
             KEY_DATETIME: "",
