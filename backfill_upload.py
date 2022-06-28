@@ -14,6 +14,7 @@ import backfill
 from datetime import datetime
 import json
 import os
+import subprocess
 import sys
 import re
 import urllib
@@ -50,6 +51,41 @@ def get_secrets():
     return secrets
 
 
+def get_device():
+    proc = subprocess.run(['adb', 'shell', 'getprop', 'ro.product.model'], capture_output=True)
+    if proc.returncode != 0:
+        raise Exception(f'failed to get device:\n  {proc.stderr}')
+
+    device = proc.stdout.strip()
+    if device == b'SM-A515F':
+        return 'samsung-a51'
+    elif device == b'Moto G (5)':
+        return 'moto-g5'
+    else:
+        raise AssertionError((f'Unknown device "{device}". If we expect this '
+                              f'device to appear on the dashboards, please add '
+                              f'it to the source code.'))
+
+
+def prompt_for_device(device):
+    '''Gets the model of the device that is currently plugged in and prompts
+    the user if this is the one they want to upload for. We do it this way,
+    rather than the command line argument, so we're less likely to mess it up.
+    '''
+    value = ''
+    while value != 'y' and value != 'n':
+        value = input(f'Found device {device}. Is this correct? (y/n) ')
+        value = value.strip().lower()
+
+    if value == 'n':
+        print('Stopping upload at user prompt: please connect desired device.')
+        sys.exit(1)
+    elif value == 'y':
+        pass  # Continue the upload
+    else:
+        raise AssertionError(f'Expected value y or n. Got {value}')
+
+
 def find_perf_result_files_to_upload():
     return [os.path.join(backfill.BACKFILL_DIR, f) for f in os.listdir(backfill.BACKFILL_DIR)
             if f.endswith('-analysis.txt')]
@@ -73,7 +109,7 @@ def get_perf_results_to_upload(perf_result_file_paths):
     return output_results
 
 
-def upload(perf_result, auth_token, is_dry_run):
+def upload(perf_result, auth_token, device, is_dry_run):
     date_str = perf_result[KEY_TIMESTAMP_DATETIME].strftime('%Y-%m-%d')
 
     def print_failure(e):
@@ -88,7 +124,7 @@ def upload(perf_result, auth_token, is_dry_run):
     metric_name = TEST_NAME_TO_DASHBOARD_METRIC[perf_result[backfill.KEY_TEST_NAME]]
     req_data = '{metric},device={device},product={product} value={value} {timestamp}'.format(
         metric=metric_name,
-        device="moto-g5",
+        device=device,
         product=perf_result[backfill.KEY_PRODUCT] + '-nightly',  # we only support nightly currently
         value=perf_result[KEY_MEDIAN],
         timestamp=perf_result[KEY_TIMESTAMP_EPOCH],
@@ -119,11 +155,13 @@ def main():
         print("dry run selected: results will not be uploaded.")
 
     secrets = get_secrets()
+    device = get_device()
+    prompt_for_device(device)
 
     perf_result_file_paths = find_perf_result_files_to_upload()
     perf_results = get_perf_results_to_upload(perf_result_file_paths)
     for result in perf_results:
-        upload(result, secrets[SECRETS_KEY_AUTH], args.dry_run)
+        upload(result, secrets[SECRETS_KEY_AUTH], device, args.dry_run)
 
 
 if __name__ == '__main__':
