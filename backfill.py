@@ -179,6 +179,9 @@ def maybe_skip_onboarding(package_id, test_name, product):
 
 def run_measure_start_up_script(path_to_measure_start_up_script, durations_output_path, build_type, test_name, product):
     subprocess.run([path_to_measure_start_up_script, "--product=" + product, build_type, test_name,
+                    # The iteration count is chosen manually, through trial-and-error,
+                    # to minimize both execution time and noise.
+                    '--iter-count', '30',
                     durations_output_path], stdout=subprocess.PIPE, check=False)
 
 
