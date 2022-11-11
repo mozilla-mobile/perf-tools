@@ -127,6 +127,7 @@ def to_stats(measurements_arr):
         'min': min(measurements_arr),
         'replicate_count': len(measurements_arr),
         'replicates': measurements_arr,
+        'stdev': stat.stdev(measurements_arr),
     }
 
 
