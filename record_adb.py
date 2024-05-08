@@ -15,10 +15,8 @@ import signal
 # The consistency allows us to compare said video.
 def main(args):
     method = args.input
-    recording_name = './sdcard/output.mp4'
+    device_path = './sdcard/output.mp4'
 
-    if args.output is not None:
-        recording_name = './sdcard/' + args.output
     if method in 'touch' and (args.coordinate_x is None or args.coordinate_y is None):
         print('--touch requires --coordinate-x <coordinate> --coordinate-y <coordinate> to use the touch input')
         sys.exit()
@@ -33,7 +31,7 @@ def main(args):
 
     # Start the recording. screenrecord --bugreport puts timestamps at the top of the video and adds
     # a frame with device information at the beginning.
-    record_process = subprocess.Popen(['adb', 'shell', 'screenrecord', '--bugreport'] + [recording_name])
+    record_process = subprocess.Popen(['adb', 'shell', 'screenrecord', '--bugreport'] + [device_path])
     time.sleep(3)
 
     # TODO allow intent trigger
@@ -42,9 +40,9 @@ def main(args):
     # else:
     simulate_input(args.coordinate_x, args.coordinate_y)
     time.sleep(5)
-    record_process.kill() # Stop the recording.
+    record_process.kill()
     time.sleep(5)
-    pull_recording(record_process, recording_name)
+    pull_recording(device_path, args.output)
 
 # def record_with_intent(package):
 #     activity_start = subprocess.Popen(['adb', 'shell', 'am', 'start-activity', package +'/.App',
@@ -57,8 +55,8 @@ def simulate_input(x, y):
     tap_event.wait()
 
 
-def pull_recording(recording_name):
-    proc = subprocess.Popen(['adb', 'pull'] + [recording_name])
+def pull_recording(device_path, output):
+    proc = subprocess.Popen(['adb', 'pull', device_path, output])
     proc.wait()
 
 

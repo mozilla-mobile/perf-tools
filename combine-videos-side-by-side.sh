@@ -21,7 +21,7 @@ USAGE="USAGE: ./combine-videos-side-by-side.sh input1 input2 output"
 : ${2?$USAGE}
 : ${3?$USAGE}
 
-INTERMEDIATE_FILE=intermediate-$3
+INTERMEDIATE_FILE=$3.intermediate.mp4
 
 # Combine videos side-by-side, adapted from https://stackoverflow.com/a/42257415/2219998
 ffmpeg -i $1 -i $2 -filter_complex hstack -vsync cfr -r:v 30 $INTERMEDIATE_FILE
