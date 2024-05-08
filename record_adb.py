@@ -26,7 +26,9 @@ def main(args):
     #     print('--intent requires --package <your.package.name>')
     #     sys.exit()
 
-    check_for_existing_process()
+    kill_existing_processes("org.mozilla")
+    kill_existing_processes("com.android.chrome")
+    kill_existing_processes("org.chromium.chrome")
     record_process = subprocess.Popen(['adb', 'shell', 'screenrecord'] + [recording_name])
     time.sleep(3)
 
@@ -56,12 +58,12 @@ def pull_recording(record_process, recording_name):
     proc.wait()
 
 
-def check_for_existing_process():
+def kill_existing_processes(package_substr):
     adb_ps_command = subprocess.Popen(['adb', 'shell', 'ps', '-A', '-o', 'NAME'], stdout=subprocess.PIPE)
     try:
-        mozilla_processes = subprocess.check_output(('grep', 'org.mozilla'), stdin=adb_ps_command.stdout)
+        matching_processes = subprocess.check_output(('grep', package_substr), stdin=adb_ps_command.stdout)
         adb_ps_command.wait()
-        packages_found = mozilla_processes.decode('utf-8').split('\n')
+        packages_found = matching_processes.decode('utf-8').split('\n')
         for package in packages_found:
             if package == '':
                 continue
@@ -69,7 +71,7 @@ def check_for_existing_process():
             kill_process.wait()
             print('Successfully killed process %s' % package)
     except subprocess.CalledProcessError as e:
-        print("no mozilla processes found")
+        print("no processes matching %s found, not killing any" % package_substr)
         return
 
 
