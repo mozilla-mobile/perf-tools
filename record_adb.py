@@ -29,6 +29,8 @@ def main(args):
     kill_existing_processes("org.mozilla")
     kill_existing_processes("com.android.chrome")
     kill_existing_processes("org.chromium.chrome")
+    time.sleep(3)
+
     record_process = subprocess.Popen(['adb', 'shell', 'screenrecord'] + [recording_name])
     time.sleep(3)
 
