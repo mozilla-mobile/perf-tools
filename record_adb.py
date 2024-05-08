@@ -39,6 +39,9 @@ def main(args):
     #   record_with_intent(args.package)
     # else:
     simulate_input(args.coordinate_x, args.coordinate_y)
+    time.sleep(5)
+    record_process.kill() # Stop the recording.
+    time.sleep(5)
     pull_recording(record_process, recording_name)
 
 # def record_with_intent(package):
@@ -52,10 +55,7 @@ def simulate_input(x, y):
     tap_event.wait()
 
 
-def pull_recording(record_process, recording_name):
-    time.sleep(5)
-    record_process.kill()
-    time.sleep(5)
+def pull_recording(recording_name):
     proc = subprocess.Popen(['adb', 'pull'] + [recording_name])
     proc.wait()
 
