@@ -31,7 +31,9 @@ def main(args):
     kill_existing_processes("org.chromium.chrome")
     time.sleep(3)
 
-    record_process = subprocess.Popen(['adb', 'shell', 'screenrecord'] + [recording_name])
+    # Start the recording. screenrecord --bugreport puts timestamps at the top of the video and adds
+    # a frame with device information at the beginning.
+    record_process = subprocess.Popen(['adb', 'shell', 'screenrecord', '--bugreport'] + [recording_name])
     time.sleep(3)
 
     # TODO allow intent trigger
