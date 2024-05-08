@@ -63,7 +63,7 @@ def check_for_existing_process():
         adb_ps_command.wait()
         packages_found = mozilla_processes.decode('utf-8').split('\n')
         for package in packages_found:
-            if package is '':
+            if package == '':
                 continue
             kill_process = subprocess.Popen(['adb', 'shell', 'am', 'force-stop'] + [package])
             kill_process.wait()
