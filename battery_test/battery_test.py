@@ -9,19 +9,23 @@ import threading
 import queue
 import signal
 
+
 def run_adb_command(command, serialID=None):
     if serialID is None:
         print(command)
         return subprocess.check_output(["adb", "shell"] + command.split(), text=True)
     return subprocess.check_output(["adb", "-s", serialID, "shell"] + command.split(), text=True)
 
+
 def start_app(package, activity, serialID=None):
     run_adb_command(f"am start -n {package}/{activity}", serialID)
+
 
 def start_browsertime_command(command):
     print("Running command:", command)
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, text=True)
     return process
+
 
 def stream_output(process, stream_name, log_queue):
     while True:
@@ -34,11 +38,13 @@ def stream_output(process, stream_name, log_queue):
             if stream_name == 'stdout' and "Starting: Intent" in output:
                 log_queue.put(True)
 
+
 def get_battery_status(serialID=None):
     battery_info = run_adb_command("dumpsys battery", serialID)
     battery_level = re.search(r"level: (\d+)", battery_info).group(1)
     current_charge = run_adb_command("cat /sys/class/power_supply/battery/charge_counter", serialID)
     return battery_level, current_charge
+
 
 def capture_processes(serialID=None):
     process_output = run_adb_command("top -b -n 1 | grep -E '^[0-9]'", serialID)
@@ -49,12 +55,14 @@ def capture_processes(serialID=None):
             processes[parts[0]] = (parts[11], parts[8], parts[10])
     return processes
 
+
 def compare_and_log_changes(old_snapshot, new_snapshot):
     changes = []
     for pid, data in new_snapshot.items():
         if pid in old_snapshot and (old_snapshot[pid][1] != data[1] or old_snapshot[pid][2] != data[2]):
             changes.append(f"Name: {data[0]} | CPU%: {data[1]} | Time: {data[2]}")
     return changes
+
 
 def get_component_names(components, serialID=None):
     thermalservice_output = run_adb_command("dumpsys thermalservice", serialID)
@@ -69,6 +77,7 @@ def get_component_names(components, serialID=None):
             types[comp_type].append(name)
     return types
 
+
 def fetch_temperatures(component_names, serialID=None):
     temperatures = {}
     thermalservice_output = run_adb_command("dumpsys thermalservice", serialID)
@@ -81,6 +90,7 @@ def fetch_temperatures(component_names, serialID=None):
             if temp_match:
                 temperatures[name] = float(temp_match.group(1))
     return temperatures
+
 
 def signal_handler(sig, frame):
     print('SIGINT received. Exiting...')
@@ -101,15 +111,14 @@ def main(directory, filename, package, activity, duration, components, serialID,
         browsertime_cmd = (
             "browsertime "
             "-b firefox --android "
-            f"--firefox.geckodriverPath {os.path.expanduser('~/Repositories/mozilla-unified/target/debug/geckodriver')} "
+            f"--firefox.geckodriverPath {os.path.expanduser('~/Repositories/mozilla-unified/target/debug/geckodriver')}"
             "--firefox.android.package org.mozilla.firefox "
             "--firefox.android.activity org.mozilla.fenix.IntentReceiverActivity "
             "--firefox.geckodriverArgs=\"--android-storage\" "
             "--firefox.geckodriverArgs=\"sdcard\" "
             "test.mjs "
             "-n 1 --maxLoadTime 60000 -vvv "
-            "--pageCompleteCheck 'return true;'"
-        )
+            "--pageCompleteCheck 'return true;'")
         browsertime_process = start_browsertime_command(browsertime_cmd)
 
         threading.Thread(target=stream_output, args=(browsertime_process, 'stdout', log_queue)).start()
@@ -171,6 +180,7 @@ def main(directory, filename, package, activity, duration, components, serialID,
         if browsertime_process is not None:
             browsertime_process.kill()
 
+
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser(description='Process some integers.')
@@ -188,9 +198,17 @@ if __name__ == "__main__":
 
     parser.add_argument('duration_seconds', type=int, help='Duration in seconds')
     parser.add_argument('--serialID', type=str, help='Optional serial ID', default=None)
-    parser.add_argument('--start_method', type=str, choices=['browsertime', 'manual','adb'], default='browsertime', help='Method to start the app')
+    parser.add_argument(
+        '--start_method',
+        type=str,
+        choices=[
+            'browsertime',
+            'manual',
+            'adb'],
+        default='browsertime',
+        help='Method to start the app')
 
     args = parser.parse_args()
 
     main(args.output_directory, args.output_filename, args.package_name, args.activity_name,
-            args.duration_seconds, args.components, args.serialID, args.start_method)
+         args.duration_seconds, args.components, args.serialID, args.start_method)

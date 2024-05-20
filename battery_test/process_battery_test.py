@@ -13,7 +13,7 @@ charge_counter_regex = re.compile(r"\s*Charge Counter:\s+(\d+)")
 first_temperature_line_regex = re.compile(r"-\s*Temperature of components:\s*(\w+ Temperature:\s+[\d.]+°C)")
 temperature_regex = re.compile(r"\s*(\w+) Temperature:\s+([\d.]+)°C")
 process_regex = re.compile(r"\s*Name:\s+(.*?)\s+\|\s+CPU%:\s+([\d.]+)\s+\|\s+Time:\s+([\d:\.]+)")
-keywords = ['firefox','google', 'chrome']
+keywords = ['firefox', 'google', 'chrome']
 
 data = []
 process_data = defaultdict(list)
@@ -21,7 +21,6 @@ process_data = defaultdict(list)
 with open(input_file_path, 'r') as file:
     current_entry = {}
     for line in file:
-
 
         timestamp_match = timestamp_regex.match(line)
         if timestamp_match:
@@ -39,7 +38,6 @@ with open(input_file_path, 'r') as file:
         if charge_counter_match:
             current_entry['Charge Counter'] = int(charge_counter_match.group(1))
 
-
         if line.startswith("-Temperature of components:"):
             temperatures = []
 
@@ -48,8 +46,6 @@ with open(input_file_path, 'r') as file:
             if component_match:
                 first_component = component_match.group(1)
                 temperatures.append(first_component.strip())
-
-
 
             for temp_line in file:
                 temperature_match = temperature_regex.match(temp_line)
@@ -60,8 +56,6 @@ with open(input_file_path, 'r') as file:
 
             current_entry['Temperature of Components'] = "\n".join(temperatures)
 
-
-
         process_match = process_regex.match(line)
         if process_match:
 
@@ -69,15 +63,11 @@ with open(input_file_path, 'r') as file:
             process_cpu = process_match.group(2).strip()
             process_time = process_match.group(3).strip()
 
-
-
             process_data[current_timestamp].append({
                 "Process Name": process_name,
                 "CPU%": process_cpu,
                 "Time": process_time
             })  # A
-
-
 
     if current_entry:
         data.append(current_entry)
@@ -97,17 +87,22 @@ total_charge_loss = data[0]['Charge Counter'] - data[-1]['Charge Counter']
 
 
 total_row = {'Interval Time': 'Total',
-            'Battery Level': None,
-            'Charge Counter': total_charge_loss,
-            'Temperature of Components': None,
-            'Number of Processes': None}
+             'Battery Level': None,
+             'Charge Counter': total_charge_loss,
+             'Temperature of Components': None,
+             'Number of Processes': None}
 
 
 data.append(total_row)
 
 with open(output_file_path, 'w', newline='') as csvfile:
 
-    fieldnames = ['Interval Time', 'Battery Level', 'Charge Counter', 'Temperature of Components', 'Number of Processes']
+    fieldnames = [
+        'Interval Time',
+        'Battery Level',
+        'Charge Counter',
+        'Temperature of Components',
+        'Number of Processes']
     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
     writer.writeheader()
     for entry in data:
@@ -136,8 +131,6 @@ for timestamp in process_data:
     else:
         data.append({'Interval Time': timestamp, 'Number of Processes': num_processes})
 
-
-
     with open(process_file_path, 'w', newline='') as csvfile:
         fieldnames = ['Interval Time', 'Process Name', 'CPU%', 'Time']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -151,11 +144,11 @@ for timestamp in process_data:
                     if current_interval != timestamp:
                         current_interval = timestamp
                         writer.writerow({'Interval Time': timestamp,
-                                            'Process Name': process['Process Name'],
-                                            'CPU%': process['CPU%'],
-                                            'Time': process['Time']})
+                                         'Process Name': process['Process Name'],
+                                         'CPU%': process['CPU%'],
+                                         'Time': process['Time']})
                     else:
                         writer.writerow({'Interval Time': '',
-                                            'Process Name': process['Process Name'],
-                                            'CPU%': process['CPU%'],
-                                            'Time': process['Time']})
+                                         'Process Name': process['Process Name'],
+                                         'CPU%': process['CPU%'],
+                                         'Time': process['Time']})
