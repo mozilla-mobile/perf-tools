@@ -1,0 +1,9 @@
+{
+  "firefox": {
+    "android": {
+      "package": "org.mozilla.firefox",
+      "activity": "org.mozilla.fenix.IntentReceiverActivity",
+      "intentArgument": "-e performancetest true"
+    }
+  }
+}

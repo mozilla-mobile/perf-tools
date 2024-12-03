@@ -32,7 +32,7 @@ function capture_processes() {
 
 
 function compare_and_log_changes() {
-    if [ -f "$LAST_PROCESS_SNAPSHOT" ]; thenz
+    if [ -f "$LAST_PROCESS_SNAPSHOT" ]; then
         echo "Running tasks with changed times:"
         awk 'NR==FNR {a[$1] = $4; next} ($1 in a) && (a[$1] != $4)' "$LAST_PROCESS_SNAPSHOT" "$CURRENT_PROCESS_SNAPSHOT" | \
         awk '{print " Name:", $2, "| CPU%:", $3, "| Time:", $4}'

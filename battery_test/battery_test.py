@@ -8,7 +8,7 @@ import argparse
 import threading
 import queue
 import signal
-
+import platform
 
 def run_adb_command(command, serialID=None):
     if serialID is None:
@@ -45,6 +45,22 @@ def get_battery_status(serialID=None):
     current_charge = run_adb_command("cat /sys/class/power_supply/battery/charge_counter", serialID)
     return battery_level, current_charge
 
+def get_cpu_frequencies(serialID=None):
+    frequencies = {}
+
+    try:
+        cpu_count = len(run_adb_command("ls /sys/devices/system/cpu/ | grep -E '^cpu[0-9]+'", serialID).splitlines())
+        for i in range(cpu_count):
+            try:
+                freq = run_adb_command(f"cat /sys/devices/system/cpu/cpu{i}/cpufreq/scaling_cur_freq", serialID).strip()
+                freq_mhz = int(freq) / 1000
+                frequencies[f"CPU{i}"] = freq_mhz
+            except subprocess.CalledProcessError:
+                frequencies[f"CPU{i}"] = "offline"
+    except subprocess.CalledProcessError as e:
+        print(f"Error getting CPU frequencies: {e}")
+        return {}
+    return frequencies
 
 def capture_processes(serialID=None):
     process_output = run_adb_command("top -b -n 1 | grep -E '^[0-9]'", serialID)
@@ -94,7 +110,6 @@ def fetch_temperatures(component_names, serialID=None):
 
 def signal_handler(sig, frame):
     print('SIGINT received. Exiting...')
-    # Perform any necessary cleanup actions here (e.g., close files, save data)
     sys.exit(0)
 
 
@@ -111,12 +126,16 @@ def main(directory, filename, package, activity, duration, components, serialID,
         browsertime_cmd = (
             "browsertime "
             "-b firefox --android "
-            f"--firefox.geckodriverPath {os.path.expanduser('~/Repositories/mozilla-unified/target/debug/geckodriver')}"
+            "--firefox.android.deviceSerial 192.168.2.118:5555 "
+            "--firefox.android.intentArgument=--ez "
+            "--firefox.android.intentArgument=performancetest "
+            "--firefox.android.intentArgument=true "
+            f"--firefox.geckodriverPath {os.path.expanduser('~/Repositories/mozilla-unified/target/debug/geckodriver')} "
             "--firefox.android.package org.mozilla.firefox "
             "--firefox.android.activity org.mozilla.fenix.IntentReceiverActivity "
             "--firefox.geckodriverArgs=\"--android-storage\" "
             "--firefox.geckodriverArgs=\"sdcard\" "
-            "test.mjs "
+            "./tests/browsertime/test.mjs "
             "-n 1 --maxLoadTime 60000 -vvv "
             "--pageCompleteCheck 'return true;'")
         browsertime_process = start_browsertime_command(browsertime_cmd)
@@ -131,6 +150,8 @@ def main(directory, filename, package, activity, duration, components, serialID,
         logging_started = True
         print("adb start do nothing")
     components_names = get_component_names(components, serialID)
+    print("components_names")
+    print(components_names)
     total_duration = round(int(duration) / 15) * 15
     num_iterations = total_duration // 15
     with open(output_path, 'w+') as file:
@@ -149,11 +170,19 @@ def main(directory, filename, package, activity, duration, components, serialID,
                     battery_level, charge_counter = get_battery_status(serialID)
                     current_processes = capture_processes(serialID)
                     temperatures = fetch_temperatures(components_names, serialID)
+                    cpu_frequencies = get_cpu_frequencies(serialID)
                     file.write(f"[{(iteration + 1) * 15} seconds]\n")
 
                     file.write("-Battery info:\n")
                     file.write(f"   Battery level: {battery_level}\n")
                     file.write(f"   Charge Counter: {charge_counter}\n")
+
+                    file.write("-CPU Frequencies:\n")
+                    for cpu, freq in cpu_frequencies.items():
+                        if isinstance(freq, (int, float)):
+                            file.write(f"   {cpu}: {freq:.0f} MHz\n")
+                        else:
+                            file.write(f"   {cpu}: {freq}\n")
                     print(f"   Battery level: {battery_level}\n")
                     print(f"   Charge Counter: {charge_counter}\n")
                     file.write("-Temperature of components:\n")
@@ -170,7 +199,6 @@ def main(directory, filename, package, activity, duration, components, serialID,
                     print(f'finished iteration {iteration} and spent {iteration * 15} seconds')
                     time.sleep(15)
 
-                # Check if browsertime process has ended and stop logging if so
                 if browsertime_process and browsertime_process.poll() is not None:
                     logging_started = False
                     break
@@ -180,35 +208,24 @@ def main(directory, filename, package, activity, duration, components, serialID,
         if browsertime_process is not None:
             browsertime_process.kill()
 
-
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)
     parser = argparse.ArgumentParser(description='Process some integers.')
     parser.add_argument('output_directory', type=str, help='Output directory path')
     parser.add_argument('output_filename', type=str, help='Output filename')
-
-    if "--start_method" in sys.argv and sys.argv[sys.argv.index("--start_method") + 1] == "manual":
-        parser.add_argument('package_name', type=str, help='Android package name (required for manual start)')
-        parser.add_argument('activity_name', type=str, help='Activity name (required for manual start)')
-        parser.add_argument('components', nargs='*', help='Optional list of components', default=[])
-    else:
-        parser.add_argument('--package_name', type=str, help='Android package name (optional for browsertime)')
-        parser.add_argument('--activity_name', type=str, help='Activity name (optional for browsertime)')
-        parser.add_argument('--components', nargs='*', help='Optional list of components', default=[])
-
     parser.add_argument('duration_seconds', type=int, help='Duration in seconds')
     parser.add_argument('--serialID', type=str, help='Optional serial ID', default=None)
-    parser.add_argument(
-        '--start_method',
-        type=str,
-        choices=[
-            'browsertime',
-            'manual',
-            'adb'],
-        default='browsertime',
-        help='Method to start the app')
+    parser.add_argument('--start_method', type=str, choices=['browsertime', 'manual', 'adb'], default='browsertime', help='Method to start the app')
+
+    parser.add_argument('--package_name', type=str, help='Android package name (optional for browsertime)', default=None)
+    parser.add_argument('--activity_name', type=str, help='Activity name (optional for browsertime)', default=None)
+    parser.add_argument('--components', nargs='*', help='Optional list of components', default=[])
 
     args = parser.parse_args()
 
+    if args.start_method == "manual":
+        if not args.package_name or not args.activity_name:
+            parser.error('package_name and activity_name are required for manual start method')
+
     main(args.output_directory, args.output_filename, args.package_name, args.activity_name,
-         args.duration_seconds, args.components, args.serialID, args.start_method)
+            args.duration_seconds, args.components, args.serialID, args.start_method)
